@@ -134,13 +134,7 @@ def get_liquidations(symbol: str) -> dict:
 
 
 def get_onchain_signal(binance_symbol: str) -> dict:
-    """
-    Función principal.
-    Retorna score -1.0 (muy bearish) a +1.0 (muy bullish)
-    y block=True si el score es tan negativo que conviene no entrar.
-    """
     symbol = binance_symbol.replace("USDT", "")
-
     fg      = get_fear_greed()
     funding = get_funding_rate(symbol)
     ls      = get_long_short_ratio(symbol)
