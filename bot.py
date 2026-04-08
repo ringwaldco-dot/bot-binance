@@ -3,7 +3,7 @@ import json
 import time
 import numpy as np
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from binance.client import Client
 from groq import Groq
@@ -19,13 +19,16 @@ TELEGRAM_CHAT_ID = "1576867878"
 
 CAPITAL_TOTAL = 30.0
 MAX_POSICIONES = 3
-MONTO_POR_ORDEN = CAPITAL_TOTAL / MAX_POSICIONES
+MONTO_BASE = CAPITAL_TOTAL / MAX_POSICIONES
+MONTO_MIN = 5.0
+MONTO_MAX = 20.0
 TAKE_PROFIT = 0.012
 TAKE_PROFIT_PUMP = 0.025
 STOP_LOSS = 0.008
 TRAILING_STOP = 0.006
-MAX_CAPITAL_POR_PAR = 0.4
 HISTORIAL_FILE = "historial_binance.json"
+BLACKLIST_FILE = "blacklist.json"
+REPORTE_FILE = "ultimo_reporte.json"
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
@@ -47,6 +50,115 @@ def guardar_historial(historial):
     with open(HISTORIAL_FILE, "w") as f:
         json.dump(historial, f, indent=2)
 
+def cargar_blacklist():
+    if os.path.exists(BLACKLIST_FILE):
+        with open(BLACKLIST_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def guardar_blacklist(blacklist):
+    with open(BLACKLIST_FILE, "w") as f:
+        json.dump(blacklist, f, indent=2)
+
+def esta_en_blacklist(par):
+    blacklist = cargar_blacklist()
+    if par not in blacklist:
+        return False
+    expira = datetime.fromisoformat(blacklist[par]['expira'])
+    if datetime.now() > expira:
+        del blacklist[par]
+        guardar_blacklist(blacklist)
+        return False
+    return True
+
+def agregar_a_blacklist(par, razon):
+    blacklist = cargar_blacklist()
+    expira = (datetime.now() + timedelta(hours=24)).isoformat()
+    veces = blacklist.get(par, {}).get('veces', 0) + 1
+    blacklist[par] = {'razon': razon, 'expira': expira, 'veces': veces}
+    guardar_blacklist(blacklist)
+    print(f"  {par} agregado a blacklist por 24hs (perdidas: {veces})")
+    enviar_telegram(f"🚫 <b>BLACKLIST</b> {par}\nRazón: {razon}\nBaneado por 24 horas")
+
+def actualizar_blacklist_post_venta(par, ganancia_pct):
+    if ganancia_pct < 0:
+        blacklist = cargar_blacklist()
+        veces_perdida = blacklist.get(par, {}).get('veces', 0) + 1
+        if veces_perdida >= 2:
+            agregar_a_blacklist(par, f"Perdio {veces_perdida} veces seguidas")
+        else:
+            blacklist[par] = {'veces': veces_perdida, 'ultima_perdida': datetime.now().isoformat()}
+            guardar_blacklist(blacklist)
+    else:
+        blacklist = cargar_blacklist()
+        if par in blacklist and 'expira' not in blacklist[par]:
+            del blacklist[par]
+            guardar_blacklist(blacklist)
+
+def calcular_monto_dinamico(historial):
+    cerradas = [p for p in historial if p.get('estado') in ['cerrada_ganancia', 'cerrada_perdida']]
+    if len(cerradas) < 3:
+        return MONTO_BASE
+    ultimas = cerradas[-5:]
+    ganancias = sum(1 for p in ultimas if p.get('estado') == 'cerrada_ganancia')
+    ratio = ganancias / len(ultimas)
+    if ratio >= 0.8:
+        monto = MONTO_BASE * 1.3
+        print(f"  Racha ganadora ({ganancias}/{len(ultimas)}) - aumentando monto")
+    elif ratio <= 0.3:
+        monto = MONTO_BASE * 0.7
+        print(f"  Racha perdedora ({ganancias}/{len(ultimas)}) - reduciendo monto")
+    else:
+        monto = MONTO_BASE
+    return round(max(MONTO_MIN, min(MONTO_MAX, monto)), 2)
+
+def calcular_monto_diversificado(historial, capital_disponible):
+    monto = calcular_monto_dinamico(historial)
+    monto = min(monto, capital_disponible * 0.9)
+    if monto < MONTO_MIN:
+        return 0
+    return round(monto, 2)
+
+def enviar_reporte_diario():
+    try:
+        ultimo = {}
+        if os.path.exists(REPORTE_FILE):
+            with open(REPORTE_FILE, "r") as f:
+                ultimo = json.load(f)
+        ultima_fecha = ultimo.get('fecha', '')
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        hora_actual = datetime.now().hour
+        if ultima_fecha == hoy or hora_actual != 8:
+            return
+        historial = cargar_historial()
+        ayer = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        ops_ayer = [p for p in historial if p.get('fecha_cierre', '').startswith(ayer)]
+        ganancias = [p for p in ops_ayer if p.get('estado') == 'cerrada_ganancia']
+        perdidas = [p for p in ops_ayer if p.get('estado') == 'cerrada_perdida']
+        total_g = sum(p.get('ganancia_pct', 0) for p in ganancias)
+        total_p = sum(p.get('ganancia_pct', 0) for p in perdidas)
+        neto = total_g + total_p
+        todas_ganancias = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
+        todas_perdidas = [p for p in historial if p.get('estado') == 'cerrada_perdida']
+        neto_total = sum(p.get('ganancia_pct', 0) for p in todas_ganancias) + sum(p.get('ganancia_pct', 0) for p in todas_perdidas)
+        blacklist = cargar_blacklist()
+        reporte = f"""📊 <b>REPORTE DIARIO</b> {ayer}
+━━━━━━━━━━━━━━━━━━━━
+📈 Operaciones: {len(ops_ayer)}
+✅ Ganancias: {len(ganancias)} (+{total_g:.2f}%)
+🔴 Pérdidas: {len(perdidas)} ({total_p:.2f}%)
+💰 Neto del día: {neto:+.2f}%
+━━━━━━━━━━━━━━━━━━━━
+📦 Acumulado total: {neto_total:+.2f}%
+🚫 Pares en blacklist: {len(blacklist)}
+━━━━━━━━━━━━━━━━━━━━
+🤖 Bot operando normalmente"""
+        enviar_telegram(reporte)
+        with open(REPORTE_FILE, "w") as f:
+            json.dump({'fecha': hoy}, f)
+    except Exception as e:
+        print(f"Error reporte: {e}")
+
 def obtener_precio(par):
     try:
         ticker = client_binance.get_symbol_ticker(symbol=par)
@@ -63,19 +175,6 @@ def obtener_capital_disponible():
         return 0
     except:
         return 0
-
-def calcular_monto_diversificado(historial, capital_disponible):
-    posiciones_abiertas = [p for p in historial if p.get('estado') == 'abierta']
-    if not posiciones_abiertas:
-        return min(MONTO_POR_ORDEN, capital_disponible * 0.9)
-    capital_en_uso = sum(p.get('monto', MONTO_POR_ORDEN) for p in posiciones_abiertas)
-    capital_libre = capital_disponible
-    if capital_libre < 5:
-        return 0
-    monto = min(MONTO_POR_ORDEN, capital_libre * 0.9)
-    if monto < 5:
-        return 0
-    return round(monto, 2)
 
 def calcular_rsi(precios, periodo=14):
     if len(precios) < periodo + 1:
@@ -166,7 +265,7 @@ def filtrar_candidatos(pares_tickers):
         cambio = float(t['priceChangePercent'])
         volumen = float(t['quoteVolume'])
         par = t['symbol']
-        if -10 <= cambio <= -1.0 and volumen > 2000000:
+        if -10 <= cambio <= -1.0 and volumen > 2000000 and not esta_en_blacklist(par):
             candidatos.append({
                 'par': par,
                 'cambio_24h': cambio,
@@ -179,6 +278,8 @@ def detectar_pumps(pares_tickers):
     pumps = []
     for t in pares_tickers:
         par = t['symbol']
+        if esta_en_blacklist(par):
+            continue
         volumen = float(t['quoteVolume'])
         try:
             klines = client_binance.get_klines(symbol=par, interval='1m', limit=10)
@@ -276,6 +377,7 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         emoji = emojis.get(tipo, '✅')
         nombre = nombres.get(tipo, 'VENTA')
         enviar_telegram(f"{emoji} <b>{nombre}</b> {par}\n📈 {'Ganancia' if pct > 0 else 'Pérdida'}: {pct:+.3f}%\n💰 Precio: ${precio_actual}")
+        actualizar_blacklist_post_venta(par, pct)
         return True
     except Exception as e:
         print(f"   Error vendiendo: {e}")
@@ -300,13 +402,11 @@ def revisar_posiciones():
         estrategia = pos.get('estrategia', 'scalp')
         tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else TAKE_PROFIT
 
-        # Actualizar precio maximo para trailing stop
         precio_maximo = float(pos.get('precio_maximo', precio_compra))
         if precio_actual > precio_maximo:
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
 
-        # Calcular trailing stop
         caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
         ganancia_actual = (precio_actual - precio_compra) / precio_compra
         trailing_activado = ganancia_actual >= TAKE_PROFIT and caida_desde_maximo >= TRAILING_STOP
@@ -353,16 +453,18 @@ def mostrar_resumen():
     abiertas = [p for p in historial if p.get('estado') == 'abierta']
     g_pct = sum(p.get('ganancia_pct', 0) for p in ganancias)
     p_pct = sum(p.get('ganancia_pct', 0) for p in perdidas)
-    print(f"  Ganancias: {len(ganancias)} (+{g_pct:.2f}%) | Perdidas: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}%")
+    blacklist = cargar_blacklist()
+    print(f"  Ganancias: {len(ganancias)} (+{g_pct:.2f}%) | Perdidas: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | Blacklist: {len(blacklist)}")
 
 def main():
     print("="*60)
-    print("  BOT PRO - Pump + Scalping + Trailing + Diversificacion")
+    print("  BOT ELITE - Pump+Scalping+Trailing+Blacklist+Dinamico")
     print("="*60)
     print(f"  TP: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}% | Trail: {TRAILING_STOP*100}%")
     mostrar_resumen()
     print("="*60)
 
+    enviar_reporte_diario()
     revisar_posiciones()
 
     historial = cargar_historial()
@@ -372,11 +474,10 @@ def main():
         print(f"\nMaximo de posiciones abiertas ({MAX_POSICIONES}). Esperando cierres.")
         return
 
-    # Verificar capital disponible
     capital_disponible = obtener_capital_disponible()
     print(f"\nCapital USDT disponible: ${capital_disponible:.2f}")
 
-    if capital_disponible < 5:
+    if capital_disponible < MONTO_MIN:
         print("Capital insuficiente para operar.")
         return
 
@@ -385,10 +486,8 @@ def main():
     if not mejores_pares:
         return
 
-    # Pares ya en posición abierta — no duplicar
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # DETECTOR DE PUMPS - primera prioridad
     print(f"\nDetectando pumps...")
     pumps = detectar_pumps(mejores_pares)
     print(f"{len(pumps)} pumps detectados\n")
@@ -430,7 +529,6 @@ def main():
             capital_disponible -= monto
             enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x\n💰 Monto: ${monto}")
 
-    # SCALPING NORMAL - segunda prioridad
     candidatos = filtrar_candidatos(mejores_pares)
     print(f"{len(candidatos)} candidatos scalping encontrados\n")
 
@@ -481,7 +579,7 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance ULTRA PRO</b>\n🚀 Pump + Scalping + Trailing Stop + Diversificación\nEscaneando cada 2 minutos...")
+    enviar_telegram("🤖 <b>Bot Binance ELITE</b>\n🚀 Pump + Scalping + Trailing + Blacklist + Monto Dinámico\nReporte diario a las 8am 📊")
     while True:
         try:
             main()

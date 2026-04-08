@@ -3923,4 +3923,818 @@ Revisando 1 posiciones...
    Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
 
 Maximo de posiciones abiertas. Esperando cierres.
+============================================================Traceback (most recent call last):
+  File "/Users/once/bot-binance/bot.py", line 4, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+  BOT SCALPING INTELIGENTE - Binance + Groq
 ============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1368 | -0.509%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.136 | -1.091%
+  STOP LOSS -1.091% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1356 | -1.382%
+  STOP LOSS -1.382% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1357 | -1.309%
+  STOP LOSS -1.309% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1368 | -0.509%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1363 | -0.873%
+  STOP LOSS -0.873% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1356 | -1.382%
+  STOP LOSS -1.382% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1357 | -1.309%
+  STOP LOSS -1.309% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1358 | -1.236%
+  STOP LOSS -1.236% VENDIENDO!Traceback (most recent call last):
+  File "/Users/once/bot-binance/bot.py", line 4, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1368 | -0.509%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1363 | -0.873%
+  STOP LOSS -0.873% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1356 | -1.382%
+  STOP LOSS -1.382% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1357 | -1.309%
+  STOP LOSS -1.309% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1358 | -1.236%
+  STOP LOSS -1.236% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...Traceback (most recent call last):
+  File "/Users/once/bot-binance/bot.py", line 4, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'
+
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1369 | -0.436%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1368 | -0.509%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1367 | -0.582%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1366 | -0.655%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1363 | -0.873%
+  STOP LOSS -0.873% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1356 | -1.382%
+  STOP LOSS -1.382% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1357 | -1.309%
+  STOP LOSS -1.309% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1358 | -1.236%
+  STOP LOSS -1.236% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1355 | -1.455%
+  STOP LOSS -1.455% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Filter failure: NOTIONAL
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
