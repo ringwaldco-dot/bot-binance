@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 from binance.client import Client
 from groq import Groq
 
-# ← NUEVO: importar el módulo on-chain
 from onchain_sentiment import get_onchain_signal, format_signal_telegram
+from market_monitor import MonitorMercado  # ← NUEVO
 
 load_dotenv()
 
@@ -34,9 +34,11 @@ HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
 RANKING_FILE = "ranking_pares.json"
+MONITOR_CICLO = 0  # ← NUEVO: contador para saber cuándo correr el monitor
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
+monitor_mercado = MonitorMercado()  # ← NUEVO: instancia del monitor
 
 # ============================================================
 # MODO HORARIO
@@ -184,7 +186,7 @@ def calcular_monto_diversificado(historial, capital_disponible):
     return round(monto, 2)
 
 # ============================================================
-# REPORTE DIARIO — agrega resumen on-chain a las 8am
+# REPORTE DIARIO
 # ============================================================
 def enviar_reporte_diario():
     try:
@@ -225,8 +227,6 @@ def enviar_reporte_diario():
 ━━━━━━━━━━━━━━━━━━━━
 🤖 Bot operando normalmente"""
         enviar_telegram(reporte)
-
-        # ← NUEVO: resumen on-chain de BTC y ETH junto al reporte
         try:
             sig_btc = get_onchain_signal("BTCUSDT")
             sig_eth = get_onchain_signal("ETHUSDT")
@@ -241,7 +241,6 @@ def enviar_reporte_diario():
             enviar_telegram(resumen)
         except Exception as e:
             print(f"  Error onchain en reporte: {e}")
-
         with open(REPORTE_FILE, "w") as f:
             json.dump({'fecha': hoy}, f)
     except Exception as e:
@@ -370,7 +369,6 @@ def es_caida_libre(par, cambio_24h):
     except:
         return False
 
-# ← NUEVO: acepta onchain_score como parámetro extra
 def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_par, onchain_score=0.0):
     try:
         rsi_5m = datos_5m['rsi']
@@ -380,7 +378,6 @@ def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_p
         bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
 
-        # ← NUEVO: descripción en lenguaje natural del score on-chain para el prompt
         if onchain_score >= 0.35:
             onchain_desc = f"ALCISTA ({onchain_score:+.2f}) — presión compradora, funding ok"
         elif onchain_score >= 0.15:
@@ -552,18 +549,14 @@ def revisar_posiciones(tp_actual, sl_actual):
         pct = round(cambio * 100, 3)
         estrategia = pos.get('estrategia', 'scalp')
         tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else tp_actual
-
         precio_maximo = float(pos.get('precio_maximo', precio_compra))
         if precio_actual > precio_maximo:
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
-
         caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
         ganancia_actual = (precio_actual - precio_compra) / precio_compra
         trailing_activado = ganancia_actual >= tp_actual and caida_desde_maximo >= TRAILING_STOP
-
         print(f"  {pos['par']} [{estrategia}] | {pct:+.3f}% | Max: {precio_maximo:.4f} | Score: {obtener_score_par(pos['par'])}")
-
         if trailing_activado:
             print(f"  TRAILING STOP! +{pct}%")
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
@@ -591,7 +584,6 @@ def revisar_posiciones(tp_actual, sl_actual):
                 cerradas += 1
         else:
             print(f"  Manteniendo... ({caida_desde_maximo*100:.2f}% desde max)")
-
     guardar_historial(historial)
     return cerradas
 
@@ -607,7 +599,86 @@ def mostrar_resumen():
     blacklist = cargar_blacklist()
     print(f"  G: {len(ganancias)} (+{g_pct:.2f}%) | P: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | BL: {len(blacklist)}")
 
+# ============================================================
+# ← NUEVO: procesar señales del monitor y operar si aplica
+# ============================================================
+def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_uso, posiciones_abiertas, tp_actual, sl_actual):
+    for señal in señales:
+        if posiciones_abiertas >= MAX_POSICIONES:
+            break
+
+        par = señal['par_binance']
+
+        if par in pares_en_uso or esta_en_blacklist(par):
+            continue
+
+        print(f"\n  📡 Señal monitor: {par} | {señal['n_fuentes']} fuentes | Groq {señal['confianza_groq']}/10")
+
+        # Chequeo on-chain
+        sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
+        try:
+            sig = get_onchain_signal(par)
+            if sig['block']:
+                print(f"  BLOQUEADO por on-chain")
+                continue
+        except:
+            pass
+
+        # Verificar datos técnicos
+        if es_caida_libre(par, señal['cambio_24h']):
+            continue
+
+        datos_5m = obtener_datos_mercado(par, '5m', 50)
+        datos_1h = obtener_datos_mercado(par, '1h', 50)
+        if not datos_5m or not datos_1h:
+            continue
+
+        # Para señales del monitor usamos umbral de confianza más alto (8+)
+        analisis = analizar_sentimiento_groq(
+            par, datos_5m, datos_1h,
+            señal['cambio_24h'], 'monitor',
+            obtener_score_par(par),
+            onchain_score=sig['score']
+        )
+        if not analisis or not analisis.get('comprar') or analisis.get('confianza', 0) < 8:
+            print(f"  Monitor descartado por Groq ({analisis.get('confianza','?') if analisis else '?'}/10)")
+            continue
+
+        monto = calcular_monto_diversificado(historial, capital_disponible)
+        if monto == 0:
+            continue
+
+        # Monto conservador para señales de monitor (máximo 70% del normal)
+        monto = round(monto * 0.7, 2)
+        if monto < MONTO_MIN:
+            continue
+
+        print(f"  ENTRADA MONITOR! {analisis['confianza']}/10 | ${monto}")
+        exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
+        if exito:
+            historial.append({
+                'par': par, 'precio_compra': precio, 'precio_maximo': precio,
+                'cantidad': cantidad, 'monto': monto,
+                'rsi_entrada': datos_5m['rsi'], 'rsi_1h_entrada': datos_1h['rsi'],
+                'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
+                'score_entrada': obtener_score_par(par),
+                'onchain_score': sig['score'],
+                'fuentes_monitor': señal['n_fuentes'],
+                'estado': 'abierta', 'estrategia': 'monitor',
+                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            guardar_historial(historial)
+            posiciones_abiertas += 1
+            pares_en_uso.add(par)
+            capital_disponible -= monto
+
+    return posiciones_abiertas, capital_disponible
+
+# ============================================================
+# MAIN
+# ============================================================
 def main():
+    global MONITOR_CICLO
     modo, tp_actual, sl_actual = obtener_modo_horario()
     hora = datetime.now().hour
 
@@ -641,7 +712,22 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # ── PUMPS ────────────────────────────────────────────────────────────────
+    # ← NUEVO: correr monitor cada 5 ciclos (~10 minutos)
+    MONITOR_CICLO += 1
+    if MONITOR_CICLO >= 5:
+        MONITOR_CICLO = 0
+        print(f"\n📡 Corriendo monitor de mercado amplio...")
+        try:
+            señales = monitor_mercado.escanear()
+            if señales and posiciones_abiertas < MAX_POSICIONES:
+                posiciones_abiertas, capital_disponible = procesar_señales_monitor(
+                    señales, historial, capital_disponible,
+                    pares_en_uso, posiciones_abiertas, tp_actual, sl_actual
+                )
+        except Exception as e:
+            print(f"  Error monitor: {e}")
+
+    # ── PUMPS ─────────────────────────────────────────────────
     if modo != 'nocturno':
         print(f"\nDetectando pumps...")
         pumps = detectar_pumps(mejores_pares)
@@ -659,8 +745,6 @@ def main():
                 continue
             if es_caida_libre(par, p['cambio_24h']):
                 continue
-
-            # ← NUEVO: chequeo on-chain antes de entrar al pump
             sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
             try:
                 sig = get_onchain_signal(par)
@@ -670,23 +754,19 @@ def main():
                     continue
             except Exception as e:
                 print(f"  OnChain error (ignorando): {e}")
-
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 continue
-
-            # ← NUEVO: reducir monto 30% si on-chain es levemente negativo
             if sig['action'] == 'SLIGHT_SHORT':
                 monto = round(monto * 0.7, 2)
                 print(f"  Monto reducido a ${monto} por on-chain negativo")
-
             exito, cantidad, precio = ejecutar_compra(par, monto, datos)
             if exito:
                 historial.append({
                     'par': par, 'precio_compra': precio, 'precio_maximo': precio,
                     'cantidad': cantidad, 'monto': monto, 'rsi_entrada': datos['rsi'],
                     'confianza': 9, 'razon': f"PUMP +{p['cambio_5m']}% vol {p['ratio_volumen']}x",
-                    'onchain_score': sig['score'],   # ← NUEVO
+                    'onchain_score': sig['score'],
                     'estado': 'abierta', 'estrategia': 'pump',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
@@ -697,10 +777,10 @@ def main():
                 enviar_telegram(
                     f"🚀 <b>PUMP</b> {par}\n"
                     f"+{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}\n"
-                    f"💰 ${monto} | OnChain: {sig['emoji']} {sig['score']:+.3f}"  # ← NUEVO
+                    f"💰 ${monto} | OnChain: {sig['emoji']} {sig['score']:+.3f}"
                 )
 
-    # ── SCALPING ─────────────────────────────────────────────────────────────
+    # ── SCALPING ──────────────────────────────────────────────
     candidatos = filtrar_candidatos(mejores_pares, modo)
     print(f"\n{len(candidatos)} candidatos scalping\n")
 
@@ -712,12 +792,9 @@ def main():
         par = c['par']
         score = c['score']
         print(f"Analizando {par} | 24h: {c['cambio_24h']}% | Score: {score}")
-
         if es_caida_libre(par, c['cambio_24h']):
             print(f"  Caida libre, saltando")
             continue
-
-        # ← NUEVO: chequeo on-chain antes de pedir datos técnicos
         sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
         try:
             sig = get_onchain_signal(par)
@@ -727,42 +804,31 @@ def main():
                 continue
         except Exception as e:
             print(f"  OnChain error (ignorando): {e}")
-
         datos_5m = obtener_datos_mercado(par, '5m', 50)
         datos_1h = obtener_datos_mercado(par, '1h', 50)
         if not datos_5m or not datos_1h:
             continue
-
         print(f"  5m RSI:{datos_5m['rsi']} MACD:{'▲' if datos_5m['macd'] > datos_5m['macd_signal'] else '▼'} | 1h RSI:{datos_1h['rsi']} MACD:{'▲' if datos_1h['macd'] > datos_1h['macd_signal'] else '▼'}")
-
         confirmado, razon_tf = confirmar_dos_timeframes(par)
         if not confirmado:
             print(f"  Sin confirmacion: {razon_tf}")
             continue
-
-        # ← NUEVO: pasar onchain_score al prompt de Groq
         analisis = analizar_sentimiento_groq(
             par, datos_5m, datos_1h, c['cambio_24h'], modo, score,
             onchain_score=sig['score']
         )
         if not analisis:
             continue
-
-        # ← NUEVO: subir umbral de confianza si on-chain es negativo
         confianza_minima = 8 if modo == 'nocturno' else 7
         if sig['action'] == 'SLIGHT_SHORT':
             confianza_minima = min(9, confianza_minima + 1)
             print(f"  Umbral subido a {confianza_minima}/10 por on-chain negativo")
-
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 continue
-
-            # ← NUEVO: reducir monto si on-chain no acompaña
             if sig['action'] == 'SLIGHT_SHORT':
                 monto = round(monto * 0.7, 2)
-
             print(f"  ENTRADA! {analisis['confianza']}/10 | {analisis.get('razon','')} | ${monto}")
             exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
             if exito:
@@ -772,8 +838,8 @@ def main():
                     'rsi_entrada': datos_5m['rsi'], 'rsi_1h_entrada': datos_1h['rsi'],
                     'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
                     'score_entrada': score, 'modo': modo,
-                    'onchain_score': sig['score'],    # ← NUEVO
-                    'onchain_action': sig['action'],  # ← NUEVO
+                    'onchain_score': sig['score'],
+                    'onchain_action': sig['action'],
                     'estado': 'abierta', 'estrategia': 'scalp',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
@@ -789,7 +855,7 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')} | Modo: {modo}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📡 Sentiment On-Chain activado\n📊 Análisis completo activado")
+    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📡 Sentiment On-Chain activado\n🌐 Monitor amplio activado\n📊 Análisis completo activado")
     while True:
         try:
             main()
