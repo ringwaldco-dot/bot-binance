@@ -30,10 +30,60 @@ CRASH_THRESHOLD = -8.0
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
+RANKING_FILE = "ranking_pares.json"
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
 
+# ============================================================
+# MODO HORARIO
+# ============================================================
+def obtener_modo_horario():
+    hora = datetime.now().hour
+    if 8 <= hora < 16:
+        return 'activo', 0.012, 0.008
+    elif 16 <= hora < 22:
+        return 'normal', 0.015, 0.010
+    else:
+        return 'nocturno', 0.020, 0.006
+
+# ============================================================
+# RANKING DE PARES
+# ============================================================
+def cargar_ranking():
+    if os.path.exists(RANKING_FILE):
+        with open(RANKING_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def guardar_ranking(ranking):
+    with open(RANKING_FILE, "w") as f:
+        json.dump(ranking, f, indent=2)
+
+def actualizar_ranking(par, ganancia_pct):
+    ranking = cargar_ranking()
+    if par not in ranking:
+        ranking[par] = {'ops': 0, 'ganancias': 0, 'perdidas': 0, 'pct_total': 0, 'score': 50}
+    ranking[par]['ops'] += 1
+    ranking[par]['pct_total'] = round(ranking[par]['pct_total'] + ganancia_pct, 3)
+    if ganancia_pct > 0:
+        ranking[par]['ganancias'] += 1
+        ranking[par]['score'] = min(100, ranking[par]['score'] + 5)
+    else:
+        ranking[par]['perdidas'] += 1
+        ranking[par]['score'] = max(0, ranking[par]['score'] - 8)
+    guardar_ranking(ranking)
+
+def obtener_score_par(par):
+    ranking = cargar_ranking()
+    return ranking.get(par, {}).get('score', 50)
+
+def par_tiene_buen_score(par, minimo=30):
+    return obtener_score_par(par) >= minimo
+
+# ============================================================
+# TELEGRAM
+# ============================================================
 def enviar_telegram(mensaje):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -41,6 +91,9 @@ def enviar_telegram(mensaje):
     except:
         pass
 
+# ============================================================
+# HISTORIAL
+# ============================================================
 def cargar_historial():
     if os.path.exists(HISTORIAL_FILE):
         with open(HISTORIAL_FILE, "r") as f:
@@ -51,6 +104,9 @@ def guardar_historial(historial):
     with open(HISTORIAL_FILE, "w") as f:
         json.dump(historial, f, indent=2)
 
+# ============================================================
+# BLACKLIST
+# ============================================================
 def cargar_blacklist():
     if os.path.exists(BLACKLIST_FILE):
         with open(BLACKLIST_FILE, "r") as f:
@@ -82,6 +138,7 @@ def agregar_a_blacklist(par, razon):
     enviar_telegram(f"🚫 <b>BLACKLIST</b> {par}\nRazón: {razon}\nBaneado por 24 horas")
 
 def actualizar_blacklist_post_venta(par, ganancia_pct):
+    actualizar_ranking(par, ganancia_pct)
     if ganancia_pct < 0:
         blacklist = cargar_blacklist()
         veces_perdida = blacklist.get(par, {}).get('veces', 0) + 1
@@ -96,6 +153,9 @@ def actualizar_blacklist_post_venta(par, ganancia_pct):
             del blacklist[par]
             guardar_blacklist(blacklist)
 
+# ============================================================
+# MONTO DINAMICO
+# ============================================================
 def calcular_monto_dinamico(historial):
     cerradas = [p for p in historial if p.get('estado') in ['cerrada_ganancia', 'cerrada_perdida']]
     if len(cerradas) < 3:
@@ -120,6 +180,9 @@ def calcular_monto_diversificado(historial, capital_disponible):
         return 0
     return round(monto, 2)
 
+# ============================================================
+# REPORTE DIARIO
+# ============================================================
 def enviar_reporte_diario():
     try:
         ultimo = {}
@@ -143,6 +206,9 @@ def enviar_reporte_diario():
         todas_perdidas = [p for p in historial if p.get('estado') == 'cerrada_perdida']
         neto_total = sum(p.get('ganancia_pct', 0) for p in todas_ganancias) + sum(p.get('ganancia_pct', 0) for p in todas_perdidas)
         blacklist = cargar_blacklist()
+        ranking = cargar_ranking()
+        top_pares = sorted(ranking.items(), key=lambda x: x[1]['score'], reverse=True)[:3]
+        top_str = " | ".join([f"{p[0]}({p[1]['score']})" for p in top_pares]) if top_pares else "Sin datos"
         reporte = f"""📊 <b>REPORTE DIARIO</b> {ayer}
 ━━━━━━━━━━━━━━━━━━━━
 📈 Operaciones: {len(ops_ayer)}
@@ -152,6 +218,7 @@ def enviar_reporte_diario():
 ━━━━━━━━━━━━━━━━━━━━
 📦 Acumulado total: {neto_total:+.2f}%
 🚫 Pares en blacklist: {len(blacklist)}
+🏆 Top pares: {top_str}
 ━━━━━━━━━━━━━━━━━━━━
 🤖 Bot operando normalmente"""
         enviar_telegram(reporte)
@@ -160,6 +227,9 @@ def enviar_reporte_diario():
     except Exception as e:
         print(f"Error reporte: {e}")
 
+# ============================================================
+# INDICADORES TECNICOS
+# ============================================================
 def obtener_precio(par):
     try:
         ticker = client_binance.get_symbol_ticker(symbol=par)
@@ -246,60 +316,41 @@ def obtener_datos_mercado(par, intervalo='5m', limite=50):
         return None
 
 def confirmar_dos_timeframes(par):
-    """Confirma señal en 5min y 1h antes de entrar"""
     try:
         datos_5m = obtener_datos_mercado(par, '5m', 50)
         datos_1h = obtener_datos_mercado(par, '1h', 50)
         if not datos_5m or not datos_1h:
             return False, "No se pudieron obtener datos"
-
-        # Señales en 5 minutos
         rsi_5m = datos_5m['rsi']
         macd_5m = datos_5m['macd'] > datos_5m['macd_signal']
         bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
-
-        # Señales en 1 hora
         rsi_1h = datos_1h['rsi']
         macd_1h = datos_1h['macd'] > datos_1h['macd_signal']
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
-
         señales_5m = sum([rsi_5m < 40, macd_5m, bb_5m])
         señales_1h = sum([rsi_1h < 50, macd_1h, bb_1h])
-
         confirmado = señales_5m >= 1 and señales_1h >= 1
-        razon = f"5m: {señales_5m}/3 señales | 1h: {señales_1h}/3 señales"
+        razon = f"5m: {señales_5m}/3 | 1h: {señales_1h}/3"
         return confirmado, razon
     except:
-        return False, "Error en confirmacion"
+        return False, "Error"
 
 def es_caida_libre(par, cambio_24h):
-    """Detecta si es una caida libre real vs una correccion temporal"""
     try:
         klines_1h = client_binance.get_klines(symbol=par, interval='1h', limit=24)
         precios_1h = [float(k[4]) for k in klines_1h]
-
-        # Caida en las ultimas 6 horas
         caida_6h = ((precios_1h[-1] - precios_1h[-6]) / precios_1h[-6]) * 100
-        # Caida en las ultimas 12 horas
         caida_12h = ((precios_1h[-1] - precios_1h[-12]) / precios_1h[-12]) * 100
-        # Caida acelerando (cada hora cae mas)
         caidas_por_hora = [((precios_1h[i] - precios_1h[i-1]) / precios_1h[i-1]) * 100 for i in range(-4, 0)]
         acelerando = all(c < -0.3 for c in caidas_por_hora)
-
-        es_crash = (
-            caida_6h < CRASH_THRESHOLD or
-            caida_12h < CRASH_THRESHOLD * 1.5 or
-            acelerando
-        )
-
+        es_crash = caida_6h < CRASH_THRESHOLD or caida_12h < CRASH_THRESHOLD * 1.5 or acelerando
         if es_crash:
-            print(f"  CRASH DETECTADO: 6h={caida_6h:.1f}% 12h={caida_12h:.1f}% acelerando={acelerando}")
+            print(f"  CRASH: 6h={caida_6h:.1f}% 12h={caida_12h:.1f}% acelerando={acelerando}")
         return es_crash
     except:
         return False
 
-def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h):
-    """Analiza con Groq usando datos de ambos timeframes"""
+def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_par):
     try:
         rsi_5m = datos_5m['rsi']
         rsi_1h = datos_1h['rsi']
@@ -308,10 +359,11 @@ def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h):
         bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
 
-        prompt = f"""Sos un trader experto en crypto scalping con análisis técnico avanzado.
-Analizás DOS timeframes antes de decidir.
+        prompt = f"""Sos un trader experto en crypto scalping.
 
 Par: {par}
+Score histórico del par: {score_par}/100
+Modo horario: {modo}
 Cambio 24h: {cambio_24h}%
 
 TIMEFRAME 5 MINUTOS:
@@ -324,10 +376,11 @@ TIMEFRAME 1 HORA:
 - MACD: {'ALCISTA' if macd_alcista_1h else 'BAJISTA'}
 - Bollinger: {'CERCA DEL PISO' if bb_1h else 'zona media'}
 
-Reglas estrictas:
+Reglas:
 - Solo comprá si AMBOS timeframes tienen al menos 1 señal positiva
-- Si el RSI de 1h es mayor a 60, NO compres
-- Si el MACD de 1h es bajista y el RSI de 1h mayor a 50, NO compres
+- Si score_par < 30, sé MUY conservador
+- Si score_par > 70, podés ser más agresivo
+- En modo nocturno, solo entrá si hay 2+ señales en ambos timeframes
 
 Respondé SOLO con JSON:
 {{"comprar": true, "confianza": 8, "razon": "1 linea"}}"""
@@ -364,19 +417,22 @@ def obtener_mejores_pares():
     except:
         return []
 
-def filtrar_candidatos(pares_tickers):
+def filtrar_candidatos(pares_tickers, modo):
     candidatos = []
     for t in pares_tickers:
         cambio = float(t['priceChangePercent'])
         volumen = float(t['quoteVolume'])
         par = t['symbol']
-        if -10 <= cambio <= -1.0 and volumen > 2000000 and not esta_en_blacklist(par):
+        umbral = -1.0 if modo != 'nocturno' else -2.0
+        if umbral >= cambio >= -10 and volumen > 2000000 and not esta_en_blacklist(par):
+            score = obtener_score_par(par)
             candidatos.append({
                 'par': par,
                 'cambio_24h': cambio,
-                'volumen': volumen
+                'volumen': volumen,
+                'score': score
             })
-    candidatos.sort(key=lambda x: x['cambio_24h'])
+    candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:15]
 
 def detectar_pumps(pares_tickers):
@@ -400,12 +456,13 @@ def detectar_pumps(pares_tickers):
                     'cambio_5m': round(cambio_5m, 3),
                     'cambio_24h': float(t['priceChangePercent']),
                     'ratio_volumen': round(ratio_volumen, 2),
-                    'volumen': volumen
+                    'volumen': volumen,
+                    'score': obtener_score_par(par)
                 })
         except:
             continue
         time.sleep(0.1)
-    pumps.sort(key=lambda x: x['ratio_volumen'], reverse=True)
+    pumps.sort(key=lambda x: (x['ratio_volumen'] + x['score']/20), reverse=True)
     return pumps[:5]
 
 def ejecutar_compra(par, monto, datos):
@@ -414,7 +471,7 @@ def ejecutar_compra(par, monto, datos):
         qty = float(orden['executedQty'])
         precio = float(orden['fills'][0]['price']) if orden.get('fills') else obtener_precio(par)
         print(f"   COMPRA OK! {qty} {par} a ${precio}")
-        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI 5m: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'}\n💵 Monto: ${monto}")
+        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI: {datos['rsi']} | Score: {obtener_score_par(par)}/100\n💵 Monto: ${monto}")
         return True, qty, precio
     except Exception as e:
         print(f"   Error comprando: {e}")
@@ -439,7 +496,7 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         print(f"   Error vendiendo: {e}")
         return False
 
-def revisar_posiciones():
+def revisar_posiciones(tp_actual, sl_actual):
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta']
     if not posiciones:
@@ -456,7 +513,7 @@ def revisar_posiciones():
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
         estrategia = pos.get('estrategia', 'scalp')
-        tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else TAKE_PROFIT
+        tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else tp_actual
 
         precio_maximo = float(pos.get('precio_maximo', precio_compra))
         if precio_actual > precio_maximo:
@@ -465,12 +522,12 @@ def revisar_posiciones():
 
         caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
         ganancia_actual = (precio_actual - precio_compra) / precio_compra
-        trailing_activado = ganancia_actual >= TAKE_PROFIT and caida_desde_maximo >= TRAILING_STOP
+        trailing_activado = ganancia_actual >= tp_actual and caida_desde_maximo >= TRAILING_STOP
 
-        print(f"  {pos['par']} [{estrategia}] | Compra: {precio_compra:.4f} | Actual: {precio_actual:.4f} | {pct:+.3f}% | Max: {precio_maximo:.4f}")
+        print(f"  {pos['par']} [{estrategia}] | {pct:+.3f}% | Max: {precio_maximo:.4f} | Score: {obtener_score_par(pos['par'])}")
 
         if trailing_activado:
-            print(f"  TRAILING STOP! Cayó {caida_desde_maximo*100:.2f}% desde máximo. Ganancia: +{pct}%")
+            print(f"  TRAILING STOP! +{pct}%")
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
                 historial[i]['estado'] = 'cerrada_ganancia'
                 historial[i]['precio_venta'] = precio_actual
@@ -486,7 +543,7 @@ def revisar_posiciones():
                 historial[i]['ganancia_pct'] = pct
                 historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cerradas += 1
-        elif cambio <= -STOP_LOSS:
+        elif cambio <= -sl_actual:
             print(f"  STOP LOSS {pct}%!")
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
                 historial[i]['estado'] = 'cerrada_perdida'
@@ -495,7 +552,7 @@ def revisar_posiciones():
                 historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cerradas += 1
         else:
-            print(f"  Manteniendo... (trailing en {caida_desde_maximo*100:.2f}% desde max)")
+            print(f"  Manteniendo... ({caida_desde_maximo*100:.2f}% desde max)")
 
     guardar_historial(historial)
     return cerradas
@@ -510,88 +567,81 @@ def mostrar_resumen():
     g_pct = sum(p.get('ganancia_pct', 0) for p in ganancias)
     p_pct = sum(p.get('ganancia_pct', 0) for p in perdidas)
     blacklist = cargar_blacklist()
-    print(f"  Ganancias: {len(ganancias)} (+{g_pct:.2f}%) | Perdidas: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | Blacklist: {len(blacklist)}")
+    print(f"  G: {len(ganancias)} (+{g_pct:.2f}%) | P: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | BL: {len(blacklist)}")
 
 def main():
+    modo, tp_actual, sl_actual = obtener_modo_horario()
+    hora = datetime.now().hour
+
     print("="*60)
-    print("  BOT ELITE MAX - 2 Timeframes + Anti-Crash + Sentimiento")
+    print(f"  BOT DEFINITIVO - Modo: {modo.upper()} ({hora}hs)")
     print("="*60)
-    print(f"  TP: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}% | Trail: {TRAILING_STOP*100}%")
+    print(f"  TP: {tp_actual*100}% | SL: {sl_actual*100}% | Trail: {TRAILING_STOP*100}%")
     mostrar_resumen()
     print("="*60)
 
     enviar_reporte_diario()
-    revisar_posiciones()
+    revisar_posiciones(tp_actual, sl_actual)
 
     historial = cargar_historial()
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
 
     if posiciones_abiertas >= MAX_POSICIONES:
-        print(f"\nMaximo de posiciones abiertas ({MAX_POSICIONES}). Esperando cierres.")
+        print(f"\nMaximo de posiciones. Esperando cierres.")
         return
 
     capital_disponible = obtener_capital_disponible()
-    print(f"\nCapital USDT disponible: ${capital_disponible:.2f}")
+    print(f"\nCapital: ${capital_disponible:.2f} | Modo: {modo}")
 
     if capital_disponible < MONTO_MIN:
-        print("Capital insuficiente para operar.")
+        print("Capital insuficiente.")
         return
 
-    print(f"\nEscaneando mercado...")
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
         return
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # DETECTOR DE PUMPS
-    print(f"\nDetectando pumps...")
-    pumps = detectar_pumps(mejores_pares)
-    print(f"{len(pumps)} pumps detectados\n")
+    # PUMPS - primera prioridad
+    if modo != 'nocturno':
+        print(f"\nDetectando pumps...")
+        pumps = detectar_pumps(mejores_pares)
+        print(f"{len(pumps)} pumps\n")
 
-    for p in pumps:
-        if posiciones_abiertas >= MAX_POSICIONES:
-            break
-        if p['par'] in pares_en_uso:
-            continue
-        par = p['par']
-        print(f"PUMP! {par} | +{p['cambio_5m']}% en 5min | Volumen {p['ratio_volumen']}x")
-        datos = obtener_datos_mercado(par)
-        if not datos or datos['rsi'] > 72:
-            print(f"  RSI muy alto, saltando")
-            continue
-        if es_caida_libre(par, p['cambio_24h']):
-            print(f"  CAIDA LIBRE detectada, saltando")
-            continue
-        monto = calcular_monto_diversificado(historial, capital_disponible)
-        if monto == 0:
-            print("  Capital insuficiente")
-            continue
-        print(f"  RSI: {datos['rsi']} OK - ENTRANDO con ${monto}!")
-        exito, cantidad, precio = ejecutar_compra(par, monto, datos)
-        if exito:
-            historial.append({
-                'par': par,
-                'precio_compra': precio,
-                'precio_maximo': precio,
-                'cantidad': cantidad,
-                'monto': monto,
-                'rsi_entrada': datos['rsi'],
-                'confianza': 9,
-                'razon': f"PUMP +{p['cambio_5m']}% en 5min, volumen {p['ratio_volumen']}x",
-                'estado': 'abierta',
-                'estrategia': 'pump',
-                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-            guardar_historial(historial)
-            posiciones_abiertas += 1
-            pares_en_uso.add(par)
-            capital_disponible -= monto
-            enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x\n💰 Monto: ${monto}")
+        for p in pumps:
+            if posiciones_abiertas >= MAX_POSICIONES:
+                break
+            if p['par'] in pares_en_uso:
+                continue
+            par = p['par']
+            print(f"PUMP! {par} | +{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}")
+            datos = obtener_datos_mercado(par)
+            if not datos or datos['rsi'] > 72:
+                continue
+            if es_caida_libre(par, p['cambio_24h']):
+                continue
+            monto = calcular_monto_diversificado(historial, capital_disponible)
+            if monto == 0:
+                continue
+            exito, cantidad, precio = ejecutar_compra(par, monto, datos)
+            if exito:
+                historial.append({
+                    'par': par, 'precio_compra': precio, 'precio_maximo': precio,
+                    'cantidad': cantidad, 'monto': monto, 'rsi_entrada': datos['rsi'],
+                    'confianza': 9, 'razon': f"PUMP +{p['cambio_5m']}% vol {p['ratio_volumen']}x",
+                    'estado': 'abierta', 'estrategia': 'pump',
+                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                guardar_historial(historial)
+                posiciones_abiertas += 1
+                pares_en_uso.add(par)
+                capital_disponible -= monto
+                enviar_telegram(f"🚀 <b>PUMP</b> {par}\n+{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}\n💰 ${monto}")
 
-    # SCALPING CON DOBLE TIMEFRAME
-    candidatos = filtrar_candidatos(mejores_pares)
-    print(f"{len(candidatos)} candidatos scalping encontrados\n")
+    # SCALPING - segunda prioridad
+    candidatos = filtrar_candidatos(mejores_pares, modo)
+    print(f"\n{len(candidatos)} candidatos scalping\n")
 
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
@@ -599,55 +649,44 @@ def main():
         if c['par'] in pares_en_uso:
             continue
         par = c['par']
-        print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}%")
+        score = c['score']
+        print(f"Analizando {par} | 24h: {c['cambio_24h']}% | Score: {score}")
 
-        # Filtro anti-crash
         if es_caida_libre(par, c['cambio_24h']):
-            print(f"  CAIDA LIBRE detectada, saltando")
+            print(f"  Caida libre, saltando")
             continue
 
-        # Obtener datos de ambos timeframes
         datos_5m = obtener_datos_mercado(par, '5m', 50)
         datos_1h = obtener_datos_mercado(par, '1h', 50)
         if not datos_5m or not datos_1h:
             continue
 
-        print(f"  5m → RSI: {datos_5m['rsi']} | MACD: {'alcista' if datos_5m['macd'] > datos_5m['macd_signal'] else 'bajista'} | BB: {'piso' if datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005 else 'normal'}")
-        print(f"  1h → RSI: {datos_1h['rsi']} | MACD: {'alcista' if datos_1h['macd'] > datos_1h['macd_signal'] else 'bajista'} | BB: {'piso' if datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01 else 'normal'}")
+        print(f"  5m RSI:{datos_5m['rsi']} MACD:{'▲' if datos_5m['macd'] > datos_5m['macd_signal'] else '▼'} | 1h RSI:{datos_1h['rsi']} MACD:{'▲' if datos_1h['macd'] > datos_1h['macd_signal'] else '▼'}")
 
-        # Confirmacion de 2 timeframes
         confirmado, razon_tf = confirmar_dos_timeframes(par)
         if not confirmado:
-            print(f"  Sin confirmacion doble timeframe: {razon_tf}")
+            print(f"  Sin confirmacion: {razon_tf}")
             continue
 
-        print(f"  Confirmacion OK: {razon_tf}")
-
-        # Analisis con Groq usando ambos timeframes
-        analisis = analizar_sentimiento_groq(par, datos_5m, datos_1h, c['cambio_24h'])
+        analisis = analizar_sentimiento_groq(par, datos_5m, datos_1h, c['cambio_24h'], modo, score)
         if not analisis:
             continue
 
-        if analisis.get('comprar') and analisis.get('confianza', 0) >= 7:
+        confianza_minima = 8 if modo == 'nocturno' else 7
+        if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
-                print("  Capital insuficiente")
                 continue
-            print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')} | Monto: ${monto}")
+            print(f"  ENTRADA! {analisis['confianza']}/10 | {analisis.get('razon','')} | ${monto}")
             exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
             if exito:
                 historial.append({
-                    'par': par,
-                    'precio_compra': precio,
-                    'precio_maximo': precio,
-                    'cantidad': cantidad,
-                    'monto': monto,
-                    'rsi_entrada': datos_5m['rsi'],
-                    'rsi_1h_entrada': datos_1h['rsi'],
-                    'confianza': analisis.get('confianza'),
-                    'razon': analisis.get('razon'),
-                    'estado': 'abierta',
-                    'estrategia': 'scalp',
+                    'par': par, 'precio_compra': precio, 'precio_maximo': precio,
+                    'cantidad': cantidad, 'monto': monto,
+                    'rsi_entrada': datos_5m['rsi'], 'rsi_1h_entrada': datos_1h['rsi'],
+                    'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
+                    'score_entrada': score, 'modo': modo,
+                    'estado': 'abierta', 'estrategia': 'scalp',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
                 guardar_historial(historial)
@@ -655,14 +694,14 @@ def main():
                 pares_en_uso.add(par)
                 capital_disponible -= monto
         else:
-            print(f"  Descartado (confianza: {analisis.get('confianza','?')}/10)")
+            print(f"  Descartado ({analisis.get('confianza','?')}/10)")
         time.sleep(0.5)
 
     print(f"\n{'='*60}")
-    print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
+    print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')} | Modo: {modo}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance ELITE MAX</b>\n📊 2 Timeframes + Anti-Crash + Blacklist + Trailing\nMáxima precisión activada 🎯")
+    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📊 Análisis completo activado")
     while True:
         try:
             main()
