@@ -1,0 +1,12 @@
+[
+  {
+    "par": "KITEUSDT",
+    "precio_compra": 0.1375,
+    "cantidad": 36.3,
+    "monto": 5.0,
+    "confianza": 8,
+    "razon": "precio cerca del minimo y cambio ultima hora bajo",
+    "estado": "abierta",
+    "fecha": "2026-04-08 13:32:06"
+  }
+]

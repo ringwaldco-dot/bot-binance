@@ -1,0 +1,1411 @@
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+Traceback (most recent call last):
+  File "bot.py", line 5, in <module>
+    from dotenv import load_dotenv
+ModuleNotFoundError: No module named 'dotenv'
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.8800 | -1.286%
+  STOP LOSS -1.286% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $71134.5900 | Cambio 1h: -0.635%
+  ENTRADA DETECTADA: Caida de -0.635% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2207.7000 | Cambio 1h: -1.246%
+  ENTRADA DETECTADA: Caida de -1.246% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.9700 | Cambio 1h: -1.297%
+  ENTRADA DETECTADA: Caida de -1.297% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3551 | Cambio 1h: -1.411%
+  ENTRADA DETECTADA: Caida de -1.411% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:46:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.7200 | -1.477%
+  STOP LOSS -1.477% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $71015.4200 | Cambio 1h: -0.801%
+  ENTRADA DETECTADA: Caida de -0.801% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2200.4500 | Cambio 1h: -1.570%
+  ENTRADA DETECTADA: Caida de -1.57% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.7600 | Cambio 1h: -1.547%
+  ENTRADA DETECTADA: Caida de -1.547% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3529 | Cambio 1h: -1.571%
+  ENTRADA DETECTADA: Caida de -1.571% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:48:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.8100 | -1.370%
+  STOP LOSS -1.37% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $71082.4400 | Cambio 1h: -0.723%
+  ENTRADA DETECTADA: Caida de -0.723% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2202.8400 | Cambio 1h: -1.486%
+  ENTRADA DETECTADA: Caida de -1.486% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.8000 | Cambio 1h: -1.487%
+  ENTRADA DETECTADA: Caida de -1.487% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3544 | Cambio 1h: -1.441%
+  ENTRADA DETECTADA: Caida de -1.441% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:50:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.5900 | -1.632%
+  STOP LOSS -1.632% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70867.8700 | Cambio 1h: -1.023%
+  ENTRADA DETECTADA: Caida de -1.023% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2194.0000 | Cambio 1h: -1.881%
+  ENTRADA DETECTADA: Caida de -1.881% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.5500 | Cambio 1h: -1.785%
+  ENTRADA DETECTADA: Caida de -1.785% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3488 | Cambio 1h: -1.848%
+  ENTRADA DETECTADA: Caida de -1.848% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:52:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.6500 | -1.560%
+  STOP LOSS -1.56% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70864.6800 | Cambio 1h: -1.027%
+  ENTRADA DETECTADA: Caida de -1.027% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2194.8800 | Cambio 1h: -1.842%
+  ENTRADA DETECTADA: Caida de -1.842% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.6900 | Cambio 1h: -1.618%
+  ENTRADA DETECTADA: Caida de -1.618% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3492 | Cambio 1h: -1.819%
+  ENTRADA DETECTADA: Caida de -1.819% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:54:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.6500 | -1.560%
+  STOP LOSS -1.56% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70833.0700 | Cambio 1h: -1.085%
+  ENTRADA DETECTADA: Caida de -1.085% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2190.9200 | Cambio 1h: -2.001%
+  ENTRADA DETECTADA: Caida de -2.001% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.6800 | Cambio 1h: -1.478%
+  ENTRADA DETECTADA: Caida de -1.478% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3475 | Cambio 1h: -1.879%
+  ENTRADA DETECTADA: Caida de -1.879% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:56:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.7100 | -1.489%
+  STOP LOSS -1.489% VENDIENDO!
+   Error vendiendo: APIError(code=-1022): Signature for this request is not valid.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70822.9100 | Cambio 1h: -1.099%
+  ENTRADA DETECTADA: Caida de -1.099% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+ETHUSDT | Precio: $2190.2200 | Cambio 1h: -2.032%
+  ENTRADA DETECTADA: Caida de -2.032% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+SOLUSDT | Precio: $82.7400 | Cambio 1h: -1.406%
+  ENTRADA DETECTADA: Caida de -1.406% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+XRPUSDT | Precio: $1.3489 | Cambio 1h: -1.777%
+  ENTRADA DETECTADA: Caida de -1.777% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1022): Signature for this request is not valid.
+
+============================================================
+  Ciclo completado: 11:58:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.9000 | -1.263%
+  STOP LOSS -1.263% VENDIENDO!
+   Error vendiendo: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70919.2800 | Cambio 1h: -0.653%
+  ENTRADA DETECTADA: Caida de -0.653% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+ETHUSDT | Precio: $2194.6000 | Cambio 1h: -1.300%
+  ENTRADA DETECTADA: Caida de -1.3% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+SOLUSDT | Precio: $82.9000 | Cambio 1h: -0.671%
+  ENTRADA DETECTADA: Caida de -0.671% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+XRPUSDT | Precio: $1.3501 | Cambio 1h: -1.287%
+  ENTRADA DETECTADA: Caida de -1.287% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+============================================================
+  Ciclo completado: 12:00:08
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.8800 | -1.286%
+  STOP LOSS -1.286% VENDIENDO!
+   Error vendiendo: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70892.0000 | Cambio 1h: -0.691%
+  ENTRADA DETECTADA: Caida de -0.691% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+ETHUSDT | Precio: $2195.1800 | Cambio 1h: -1.274%
+  ENTRADA DETECTADA: Caida de -1.274% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+SOLUSDT | Precio: $82.8900 | Cambio 1h: -0.683%
+  ENTRADA DETECTADA: Caida de -0.683% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+XRPUSDT | Precio: $1.3503 | Cambio 1h: -1.272%
+  ENTRADA DETECTADA: Caida de -1.272% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+============================================================
+  Ciclo completado: 12:02:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $83.0000 | -1.143%
+  STOP LOSS -1.143% VENDIENDO!
+   Error vendiendo: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70975.5700 | Cambio 1h: -0.574%
+  ENTRADA DETECTADA: Caida de -0.574% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+ETHUSDT | Precio: $2197.7600 | Cambio 1h: -1.158%
+  ENTRADA DETECTADA: Caida de -1.158% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+SOLUSDT | Precio: $83.0100 | Cambio 1h: -0.539%
+  Sin entrada.
+XRPUSDT | Precio: $1.3514 | Cambio 1h: -1.192%
+  ENTRADA DETECTADA: Caida de -1.192% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2015): Invalid API-key, IP, or permissions for action.
+
+============================================================
+  Ciclo completado: 12:04:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $20.0
+  Ganancias: 0 ops (+0.00%) | Perdidas: 0 ops (0.00%) | Abiertas: 1
+============================================================
+
+Revisando 1 posiciones abiertas...
+  SOLUSDT | Compra: $83.9600 | Actual: $82.9700 | -1.179%
+  STOP LOSS -1.179% VENDIENDO!
+   Error vendiendo: APIError(code=-1013): Invalid quantity.
+
+Buscando entradas en 4 pares...
+
+BTCUSDT | Precio: $70998.0000 | Cambio 1h: -0.713%
+  ENTRADA DETECTADA: Caida de -0.713% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+ETHUSDT | Precio: $2197.9300 | Cambio 1h: -1.501%
+  ENTRADA DETECTADA: Caida de -1.501% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+SOLUSDT | Precio: $82.9400 | Cambio 1h: -1.121%
+  Sin entrada.
+XRPUSDT | Precio: $1.3501 | Cambio 1h: -1.553%
+  ENTRADA DETECTADA: Caida de -1.553% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+
+============================================================
+  Ciclo completado: 12:06:07
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $4.0
+============================================================
+
+Buscando entradas en 20 pares...
+
+BTCUSDT | Precio: $71066.8400 | Cambio 1h: -0.617%
+  Sin entrada.
+ETHUSDT | Precio: $2203.0500 | Cambio 1h: -1.272%
+  Sin entrada.
+BNBUSDT | Precio: $603.1800 | Cambio 1h: -0.729%
+  ENTRADA DETECTADA: Caida de -0.729% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SOLUSDT | Precio: $83.0600 | Cambio 1h: -0.978%
+  Sin entrada.
+XRPUSDT | Precio: $1.3525 | Cambio 1h: -1.378%
+  ENTRADA DETECTADA: Caida de -1.378% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+DOGEUSDT | Precio: $0.0930 | Cambio 1h: -1.473%
+  ENTRADA DETECTADA: Caida de -1.473% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+ADAUSDT | Precio: $0.2535 | Cambio 1h: -1.015%
+  Sin entrada.
+AVAXUSDT | Precio: $9.2200 | Cambio 1h: -0.647%
+  Sin entrada.
+DOTUSDT | Precio: $1.2860 | Cambio 1h: -1.153%
+  ENTRADA DETECTADA: Caida de -1.153% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+MATICUSDT | Precio: $0.3794 | Cambio 1h: +0.238%
+  Sin entrada.
+LINKUSDT | Precio: $9.0200 | Cambio 1h: -1.313%
+  Sin entrada.
+LTCUSDT | Precio: $54.6100 | Cambio 1h: -0.763%
+  Sin entrada.
+UNIUSDT | Precio: $3.1760 | Cambio 1h: -1.336%
+  Sin entrada.
+ATOMUSDT | Precio: $1.7570 | Cambio 1h: -0.566%
+  ENTRADA DETECTADA: Caida de -0.566% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+NEARUSDT | Precio: $1.3520 | Cambio 1h: -1.170%
+  ENTRADA DETECTADA: Caida de -1.17% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+APTUSDT | Precio: $0.8420 | Cambio 1h: -1.865%
+  ENTRADA DETECTADA: Caida de -1.865% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ARBUSDT | Precio: $0.1000 | Cambio 1h: -1.283%
+  ENTRADA DETECTADA: Caida de -1.283% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+OPUSDT | Precio: $0.1157 | Cambio 1h: -1.699%
+  ENTRADA DETECTADA: Caida de -1.699% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+INJUSDT | Precio: $2.9530 | Cambio 1h: -0.973%
+  Sin entrada.
+SUIUSDT | Precio: $0.9270 | Cambio 1h: -1.571%
+  Sin entrada.
+
+============================================================
+  Ciclo completado: 12:08:19
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $4.0
+============================================================
+
+Buscando entradas en 20 pares...
+
+BTCUSDT | Precio: $70889.9600 | Cambio 1h: -0.738%
+  ENTRADA DETECTADA: Caida de -0.738% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ETHUSDT | Precio: $2197.1200 | Cambio 1h: -1.303%
+  ENTRADA DETECTADA: Caida de -1.303% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+BNBUSDT | Precio: $601.9000 | Cambio 1h: -0.832%
+  ENTRADA DETECTADA: Caida de -0.832% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SOLUSDT | Precio: $82.8400 | Cambio 1h: -0.874%
+  ENTRADA DETECTADA: Caida de -0.874% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+XRPUSDT | Precio: $1.3495 | Cambio 1h: -1.338%
+  ENTRADA DETECTADA: Caida de -1.338% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+DOGEUSDT | Precio: $0.0927 | Cambio 1h: -1.309%
+  ENTRADA DETECTADA: Caida de -1.309% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+ADAUSDT | Precio: $0.2528 | Cambio 1h: -0.902%
+  ENTRADA DETECTADA: Caida de -0.902% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+AVAXUSDT | Precio: $9.2000 | Cambio 1h: -0.755%
+  Sin entrada.
+DOTUSDT | Precio: $1.2820 | Cambio 1h: -1.233%
+  ENTRADA DETECTADA: Caida de -1.233% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+MATICUSDT | Precio: $0.3794 | Cambio 1h: +0.238%
+  Sin entrada.
+LINKUSDT | Precio: $8.9800 | Cambio 1h: -1.427%
+  ENTRADA DETECTADA: Caida de -1.427% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+LTCUSDT | Precio: $54.5200 | Cambio 1h: -0.692%
+  ENTRADA DETECTADA: Caida de -0.692% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+UNIUSDT | Precio: $3.1670 | Cambio 1h: -1.278%
+  Sin entrada.
+ATOMUSDT | Precio: $1.7570 | Cambio 1h: -0.340%
+  Sin entrada.
+NEARUSDT | Precio: $1.3490 | Cambio 1h: -1.317%
+  ENTRADA DETECTADA: Caida de -1.317% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+APTUSDT | Precio: $0.8420 | Cambio 1h: -1.636%
+  ENTRADA DETECTADA: Caida de -1.636% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ARBUSDT | Precio: $0.0997 | Cambio 1h: -1.189%
+  ENTRADA DETECTADA: Caida de -1.189% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+OPUSDT | Precio: $0.1156 | Cambio 1h: -1.365%
+  ENTRADA DETECTADA: Caida de -1.365% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+INJUSDT | Precio: $2.9480 | Cambio 1h: -0.808%
+  ENTRADA DETECTADA: Caida de -0.808% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SUIUSDT | Precio: $0.9242 | Cambio 1h: -1.576%
+  Sin entrada.
+
+============================================================
+  Ciclo completado: 12:10:22
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $4.0
+============================================================
+
+Buscando entradas en 20 pares...
+
+BTCUSDT | Precio: $71002.8300 | Cambio 1h: -0.580%
+  ENTRADA DETECTADA: Caida de -0.58% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ETHUSDT | Precio: $2201.9600 | Cambio 1h: -1.086%
+  Sin entrada.
+BNBUSDT | Precio: $602.7400 | Cambio 1h: -0.694%
+  ENTRADA DETECTADA: Caida de -0.694% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SOLUSDT | Precio: $82.9900 | Cambio 1h: -0.694%
+  Sin entrada.
+XRPUSDT | Precio: $1.3511 | Cambio 1h: -1.221%
+  ENTRADA DETECTADA: Caida de -1.221% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+DOGEUSDT | Precio: $0.0930 | Cambio 1h: -1.064%
+  Sin entrada.
+ADAUSDT | Precio: $0.2534 | Cambio 1h: -0.666%
+  Sin entrada.
+AVAXUSDT | Precio: $9.2200 | Cambio 1h: -0.539%
+  Sin entrada.
+DOTUSDT | Precio: $1.2840 | Cambio 1h: -1.079%
+  ENTRADA DETECTADA: Caida de -1.079% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+MATICUSDT | Precio: $0.3794 | Cambio 1h: +0.238%
+  Sin entrada.
+LINKUSDT | Precio: $9.0000 | Cambio 1h: -1.207%
+  ENTRADA DETECTADA: Caida de -1.207% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+LTCUSDT | Precio: $54.5800 | Cambio 1h: -0.583%
+  Sin entrada.
+UNIUSDT | Precio: $3.1760 | Cambio 1h: -0.998%
+  Sin entrada.
+ATOMUSDT | Precio: $1.7570 | Cambio 1h: -0.340%
+  Sin entrada.
+NEARUSDT | Precio: $1.3500 | Cambio 1h: -1.244%
+  ENTRADA DETECTADA: Caida de -1.244% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+APTUSDT | Precio: $0.8420 | Cambio 1h: -1.636%
+  ENTRADA DETECTADA: Caida de -1.636% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ARBUSDT | Precio: $0.0999 | Cambio 1h: -0.991%
+  ENTRADA DETECTADA: Caida de -0.991% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+OPUSDT | Precio: $0.1157 | Cambio 1h: -1.280%
+  ENTRADA DETECTADA: Caida de -1.28% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+INJUSDT | Precio: $2.9510 | Cambio 1h: -0.707%
+  ENTRADA DETECTADA: Caida de -0.707% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SUIUSDT | Precio: $0.9256 | Cambio 1h: -1.427%
+  Sin entrada.
+
+============================================================
+  Ciclo completado: 12:12:21
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $4.0
+============================================================
+
+Buscando entradas en 20 pares...
+
+BTCUSDT | Precio: $71025.0100 | Cambio 1h: -0.549%
+  Sin entrada.
+ETHUSDT | Precio: $2202.8400 | Cambio 1h: -1.046%
+  Sin entrada.
+BNBUSDT | Precio: $602.9800 | Cambio 1h: -0.654%
+  ENTRADA DETECTADA: Caida de -0.654% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SOLUSDT | Precio: $82.9800 | Cambio 1h: -0.706%
+  Sin entrada.
+XRPUSDT | Precio: $1.3510 | Cambio 1h: -1.228%
+  ENTRADA DETECTADA: Caida de -1.228% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+DOGEUSDT | Precio: $0.0930 | Cambio 1h: -1.022%
+  Sin entrada.
+ADAUSDT | Precio: $0.2532 | Cambio 1h: -0.745%
+  Sin entrada.
+AVAXUSDT | Precio: $9.2200 | Cambio 1h: -0.539%
+  Sin entrada.
+DOTUSDT | Precio: $1.2860 | Cambio 1h: -0.924%
+  ENTRADA DETECTADA: Caida de -0.924% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+MATICUSDT | Precio: $0.3794 | Cambio 1h: +0.238%
+  Sin entrada.
+LINKUSDT | Precio: $9.0000 | Cambio 1h: -1.207%
+  ENTRADA DETECTADA: Caida de -1.207% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+LTCUSDT | Precio: $54.6000 | Cambio 1h: -0.546%
+  Sin entrada.
+UNIUSDT | Precio: $3.1720 | Cambio 1h: -1.122%
+  Sin entrada.
+ATOMUSDT | Precio: $1.7570 | Cambio 1h: -0.340%
+  Sin entrada.
+NEARUSDT | Precio: $1.3500 | Cambio 1h: -1.244%
+  ENTRADA DETECTADA: Caida de -1.244% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+APTUSDT | Precio: $0.8420 | Cambio 1h: -1.636%
+  ENTRADA DETECTADA: Caida de -1.636% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ARBUSDT | Precio: $0.0999 | Cambio 1h: -0.991%
+  ENTRADA DETECTADA: Caida de -0.991% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+OPUSDT | Precio: $0.1156 | Cambio 1h: -1.365%
+  ENTRADA DETECTADA: Caida de -1.365% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+INJUSDT | Precio: $2.9500 | Cambio 1h: -0.740%
+  ENTRADA DETECTADA: Caida de -0.74% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SUIUSDT | Precio: $0.9269 | Cambio 1h: -1.289%
+  Sin entrada.
+
+============================================================
+  Ciclo completado: 12:14:20
+============================================================
+  BOT SCALPING BINANCE - Groq IA
+============================================================
+  Take Profit: 1.0% | Stop Loss: 0.8%
+  Monto por orden: $4.0
+============================================================
+
+Buscando entradas en 20 pares...
+
+BTCUSDT | Precio: $71106.7100 | Cambio 1h: -0.537%
+  Sin entrada.
+ETHUSDT | Precio: $2204.6700 | Cambio 1h: -1.044%
+  Sin entrada.
+BNBUSDT | Precio: $603.1900 | Cambio 1h: -0.590%
+  Sin entrada.
+SOLUSDT | Precio: $83.1300 | Cambio 1h: -0.467%
+  Sin entrada.
+XRPUSDT | Precio: $1.3528 | Cambio 1h: -1.039%
+  Sin entrada.
+DOGEUSDT | Precio: $0.0931 | Cambio 1h: -0.862%
+  Sin entrada.
+ADAUSDT | Precio: $0.2532 | Cambio 1h: -0.784%
+  Sin entrada.
+AVAXUSDT | Precio: $9.2200 | Cambio 1h: -0.324%
+  Sin entrada.
+DOTUSDT | Precio: $1.2860 | Cambio 1h: -0.848%
+  ENTRADA DETECTADA: Caida de -0.848% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+MATICUSDT | Precio: $0.3794 | Cambio 1h: +0.238%
+  Sin entrada.
+LINKUSDT | Precio: $9.0100 | Cambio 1h: -0.989%
+  Sin entrada.
+LTCUSDT | Precio: $54.5400 | Cambio 1h: -0.529%
+  Sin entrada.
+UNIUSDT | Precio: $3.1720 | Cambio 1h: -0.906%
+  Sin entrada.
+ATOMUSDT | Precio: $1.7570 | Cambio 1h: -0.340%
+  Sin entrada.
+NEARUSDT | Precio: $1.3530 | Cambio 1h: -1.169%
+  Sin entrada.
+APTUSDT | Precio: $0.8420 | Cambio 1h: -1.174%
+  ENTRADA DETECTADA: Caida de -1.174% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+ARBUSDT | Precio: $0.0999 | Cambio 1h: -0.696%
+  ENTRADA DETECTADA: Caida de -0.696% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+OPUSDT | Precio: $0.1156 | Cambio 1h: -1.112%
+  ENTRADA DETECTADA: Caida de -1.112% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+INJUSDT | Precio: $2.9500 | Cambio 1h: -0.640%
+  ENTRADA DETECTADA: Caida de -0.64% en 1h, precio cerca del minimo
+   Error comprando: APIError(code=-1013): Filter failure: NOTIONAL
+SUIUSDT | Precio: $0.9276 | Cambio 1h: -0.791%
+  Sin entrada.
+
+============================================================
+  Ciclo completado: 12:16:18
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.448% | Vol: $12,995,729
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en ultima hora, puede generar un rebote de 1-2%
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+Analizando REDUSDT | Cambio 24h: -2.161% | Vol: $19,348,925
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en ultima hora, puede generar un rebote de 1-2%
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+
+============================================================
+  Ciclo: 12:18:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.1% | Vol: $13,014,563
+  Descartado (confianza: 2/10)
+Analizando REDUSDT | Cambio 24h: -3.69% | Vol: $19,335,653
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en las ultimas horas, lo que puede generar un rebote en el corto plazo
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+
+============================================================
+  Ciclo: 12:20:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.318% | Vol: $13,035,336
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en ultima hora, alta probabilidad de rebote
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+Analizando REDUSDT | Cambio 24h: -3.988% | Vol: $19,289,114
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en las ultimas horas, puede generar un rebote
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+
+============================================================
+  Ciclo: 12:22:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.256% | Vol: $13,047,033
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y caida reciente
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+Analizando REDUSDT | Cambio 24h: -4.314% | Vol: $19,288,552
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y fuerte caida en ultima hora
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+
+============================================================
+  Ciclo: 12:24:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+3 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.651% | Vol: $13,060,375
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y cambio negativo en ultima hora, puede generar rebote
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+Analizando REDUSDT | Cambio 24h: -3.872% | Vol: $19,297,054
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y fuerte caida en ultima hora
+   Error comprando: APIError(code=-2010): Account has insufficient balance for requested action.
+Analizando XPLUSDT | Cambio 24h: -1.577% | Vol: $13,776,620
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:26:07
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+3 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -5.456% | Vol: $13,073,373
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y tendencia a la baja en las ultimas horas, puede generar un rebote de 1-2%
+   COMPRA OK! 36.4 KITEUSDT a $0.137
+
+============================================================
+  Ciclo: 12:28:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1369 | -0.073%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1366 | -0.292%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1367 | -0.219%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1367 | -0.219%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1372 | +0.146%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1371 | +0.073%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.138 | +0.730%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1377 | +0.511%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.137 | Actual: 0.1377 | +0.511%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando REDUSDT | Cambio 24h: -5.266% | Vol: $19,070,446
+  Descartado (confianza: 2/10)
+Analizando KITEUSDT | Cambio 24h: -4.571% | Vol: $13,223,474
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:48:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -4.775% | Vol: $13,255,171
+  Descartado (confianza: 2/10)
+Analizando REDUSDT | Cambio 24h: -4.27% | Vol: $19,033,165
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:50:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -4.709% | Vol: $13,236,875
+  Descartado (confianza: 2/10)
+Analizando REDUSDT | Cambio 24h: -3.314% | Vol: $19,009,854
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:52:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -4.498% | Vol: $13,246,387
+  Descartado (confianza: 2/10)
+Analizando REDUSDT | Cambio 24h: -3.457% | Vol: $19,013,267
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:54:07
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando REDUSDT | Cambio 24h: -5.319% | Vol: $18,957,072
+  Descartado (confianza: 2/10)
+Analizando KITEUSDT | Cambio 24h: -4.294% | Vol: $13,252,451
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:56:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando REDUSDT | Cambio 24h: -5.651% | Vol: $18,921,573
+  Descartado (confianza: 2/10)
+Analizando KITEUSDT | Cambio 24h: -4.094% | Vol: $13,260,930
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 12:58:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando REDUSDT | Cambio 24h: -7.75% | Vol: $18,857,606
+  Descartado (confianza: 2/10)
+Analizando KITEUSDT | Cambio 24h: -4.233% | Vol: $13,261,249
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:00:08
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -4.441% | Vol: $13,271,003
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:02:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -4.17% | Vol: $13,267,575
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:04:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.83% | Vol: $13,274,107
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:06:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.552% | Vol: $13,283,852
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:08:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.136% | Vol: $13,295,457
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:10:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.208% | Vol: $13,311,722
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:12:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.35% | Vol: $13,313,962
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:14:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.487% | Vol: $13,316,779
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:16:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.352% | Vol: $13,327,816
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:18:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.619% | Vol: $13,344,347
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:20:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.419% | Vol: $13,358,623
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:22:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.838% | Vol: $13,363,629
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:24:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.902% | Vol: $13,369,402
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:26:04
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.908% | Vol: $13,379,199
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:28:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+1 candidatos con caidas recientes encontrados
+
+Analizando KITEUSDT | Cambio 24h: -3.975% | Vol: $13,385,992
+  Descartado (confianza: 2/10)
+
+============================================================
+  Ciclo: 13:30:05
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+============================================================
+
+Escaneando mercado Binance en tiempo real...
+2 candidatos con caidas recientes encontrados
+
+Analizando REDUSDT | Cambio 24h: -7.511% | Vol: $17,058,790
+  Descartado (confianza: 2/10)
+Analizando KITEUSDT | Cambio 24h: -4.318% | Vol: $13,420,907
+  ENTRADA! Confianza: 8/10 | precio cerca del minimo y cambio ultima hora bajo
+   COMPRA OK! 36.3 KITEUSDT a $0.1375
+
+============================================================
+  Ciclo: 13:32:06
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1374 | -0.073%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1372 | -0.218%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1372 | -0.218%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1372 | -0.218%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1371 | -0.291%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+============================================================
+  BOT SCALPING INTELIGENTE - Binance + Groq
+============================================================
+  Take Profit: 1.2% | Stop Loss: 0.8%
+  Monto: $5.0 | Max posiciones: 1
+  Ganancias: 0 (+0.00%) | Perdidas: 0 (0.00%) | Abiertas: 1 | Neto: +0.00%
+============================================================
+
+Revisando 1 posiciones...
+  KITEUSDT | Compra: 0.1375 | Actual: 0.1372 | -0.218%
+  Manteniendo...
+
+Maximo de posiciones abiertas. Esperando cierres.
+Traceback (most recent call last):
+  File "/Users/once/bot-binance/bot.py", line 4, in <module>
+    import numpy as np
+ModuleNotFoundError: No module named 'numpy'

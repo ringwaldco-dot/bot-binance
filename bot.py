@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
 from binance.client import Client
@@ -12,10 +13,10 @@ BINANCE_API_KEY = os.getenv('BINANCE_API_KEY')
 BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
-MONTO_POR_ORDEN = 5.0
+MONTO_POR_ORDEN = 10.0
 TAKE_PROFIT = 0.012
 STOP_LOSS = 0.008
-MAX_POSICIONES = 1
+MAX_POSICIONES = 3
 HISTORIAL_FILE = "historial_binance.json"
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -38,81 +39,146 @@ def obtener_precio(par):
     except:
         return None
 
+def calcular_rsi(precios, periodo=14):
+    if len(precios) < periodo + 1:
+        return 50
+    deltas = np.diff(precios)
+    ganancias = np.where(deltas > 0, deltas, 0)
+    perdidas = np.where(deltas < 0, -deltas, 0)
+    avg_ganancia = np.mean(ganancias[-periodo:])
+    avg_perdida = np.mean(perdidas[-periodo:])
+    if avg_perdida == 0:
+        return 100
+    rs = avg_ganancia / avg_perdida
+    return 100 - (100 / (1 + rs))
+
+def calcular_macd(precios):
+    if len(precios) < 26:
+        return 0, 0
+    precios = np.array(precios)
+    ema12 = calcular_ema(precios, 12)
+    ema26 = calcular_ema(precios, 26)
+    macd = ema12 - ema26
+    signal = calcular_ema(np.array([macd] * 9), 9)
+    return macd, signal
+
+def calcular_ema(precios, periodo):
+    if len(precios) < periodo:
+        return precios[-1]
+    k = 2 / (periodo + 1)
+    ema = precios[0]
+    for precio in precios[1:]:
+        ema = precio * k + ema * (1 - k)
+    return ema
+
+def calcular_bollinger(precios, periodo=20):
+    if len(precios) < periodo:
+        return precios[-1], precios[-1], precios[-1]
+    ultimos = precios[-periodo:]
+    media = np.mean(ultimos)
+    std = np.std(ultimos)
+    banda_sup = media + 2 * std
+    banda_inf = media - 2 * std
+    return banda_sup, media, banda_inf
+
+def obtener_datos_mercado(par):
+    try:
+        klines = client_binance.get_klines(symbol=par, interval='5m', limit=50)
+        precios = [float(k[4]) for k in klines]
+        volumenes = [float(k[5]) for k in klines]
+        precio_actual = precios[-1]
+        cambio_1h = ((precios[-1] - precios[-12]) / precios[-12]) * 100
+        cambio_4h = ((precios[-1] - precios[-48]) / precios[-48]) * 100 if len(precios) >= 48 else 0
+
+        rsi = calcular_rsi(precios)
+        macd, signal = calcular_macd(precios)
+        banda_sup, media_bb, banda_inf = calcular_bollinger(precios)
+        volumen_promedio = np.mean(volumenes[-10:])
+        volumen_actual = volumenes[-1]
+
+        return {
+            'par': par,
+            'precio_actual': precio_actual,
+            'cambio_1h': round(cambio_1h, 3),
+            'cambio_4h': round(cambio_4h, 3),
+            'rsi': round(rsi, 2),
+            'macd': macd,
+            'macd_signal': signal,
+            'bb_sup': banda_sup,
+            'bb_media': media_bb,
+            'bb_inf': banda_inf,
+            'volumen_ratio': volumen_actual / volumen_promedio if volumen_promedio > 0 else 1,
+            'precios': precios
+        }
+    except Exception as e:
+        return None
+
 def obtener_mejores_pares():
     try:
         tickers = client_binance.get_ticker()
         usdt_pares = [
             t for t in tickers
             if t['symbol'].endswith('USDT')
-            and float(t['quoteVolume']) > 1000000
-            and float(t['lastPrice']) > 0.001
-            and float(t['lastPrice']) < 1000
+            and float(t['quoteVolume']) > 2000000
+            and float(t['lastPrice']) > 0.0001
+            and float(t['lastPrice']) < 500
         ]
         usdt_pares.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
-        return usdt_pares[:60]
-    except Exception as e:
-        print(f"Error obteniendo pares: {e}")
-        return []
-
-def obtener_datos_mercado(par):
-    try:
-        klines = client_binance.get_klines(symbol=par, interval='5m', limit=12)
-        precios = [float(k[4]) for k in klines]
-        precio_actual = precios[-1]
-        precio_hace_1h = precios[0]
-        cambio_1h = ((precio_actual - precio_hace_1h) / precio_hace_1h) * 100
-        maximo = max(precios)
-        minimo = min(precios)
-        volumen = sum(float(k[5]) for k in klines[-3:])
-        return {
-            'par': par,
-            'precio_actual': precio_actual,
-            'cambio_1h': round(cambio_1h, 3),
-            'maximo': maximo,
-            'minimo': minimo,
-            'volumen': volumen,
-            'precios': precios
-        }
+        return usdt_pares[:80]
     except:
-        return None
+        return []
 
 def filtrar_candidatos(pares_tickers):
     candidatos = []
     for t in pares_tickers:
         cambio = float(t['priceChangePercent'])
-        precio = float(t['lastPrice'])
         volumen = float(t['quoteVolume'])
         par = t['symbol']
-        # Buscar caídas recientes con buen volumen
-        if -8 <= cambio <= -1.5 and volumen > 2000000:
+        if -10 <= cambio <= -1.0 and volumen > 2000000:
             candidatos.append({
                 'par': par,
                 'cambio_24h': cambio,
-                'precio': precio,
                 'volumen': volumen
             })
     candidatos.sort(key=lambda x: x['cambio_24h'])
-    return candidatos[:10]
+    return candidatos[:15]
 
 def analizar_con_groq(datos, cambio_24h):
     try:
-        prompt = f"""Sos un trader experto en crypto scalping.
-Analizá si este par tiene alta probabilidad de rebote en los proximos minutos.
+        rsi = datos['rsi']
+        macd = datos['macd']
+        signal = datos['macd_signal']
+        precio = datos['precio_actual']
+        bb_inf = datos['bb_inf']
+        bb_sup = datos['bb_sup']
+        volumen_ratio = datos['volumen_ratio']
+
+        cerca_bb_inf = precio <= bb_inf * 1.005
+        rsi_sobreventa = rsi < 35
+        macd_alcista = macd > signal
+        volumen_alto = volumen_ratio > 1.2
+
+        prompt = f"""Sos un trader experto en crypto scalping con conocimiento avanzado de análisis técnico.
 
 Par: {datos['par']}
-Precio actual: {datos['precio_actual']}
-Cambio ultima hora: {datos['cambio_1h']}%
+Precio: {precio}
+Cambio 1h: {datos['cambio_1h']}%
 Cambio 24h: {cambio_24h}%
-Maximo 1h: {datos['maximo']}
-Minimo 1h: {datos['minimo']}
-Precio cerca del minimo: {'SI' if datos['precio_actual'] <= datos['minimo'] * 1.003 else 'NO'}
 
-Estrategia: comprar caidas para vender en rebote de 1-2%.
+INDICADORES TÉCNICOS:
+- RSI: {rsi} {'(SOBREVENTA - buena señal de compra)' if rsi_sobreventa else '(neutral)' if rsi < 50 else '(sobrecompra)'}
+- MACD: {round(macd, 6)} | Signal: {round(signal, 6)} {'(ALCISTA)' if macd_alcista else '(BAJISTA)'}
+- Bollinger: Precio {'CERCA DEL PISO' if cerca_bb_inf else 'en zona media' if precio <= bb_inf * 1.02 else 'lejos del piso'}
+- Volumen: {round(volumen_ratio, 2)}x el promedio {'(ALTO)' if volumen_alto else '(normal)'}
 
-Respondé SOLO con JSON sin texto extra:
-{{"comprar": true, "confianza": 8, "razon": "breve explicacion"}}
+Señales positivas: RSI sobreventa={rsi_sobreventa}, MACD alcista={macd_alcista}, Cerca BB inferior={cerca_bb_inf}
 
-Si no hay ventaja clara, pon "comprar": false."""
+Analizá si hay alta probabilidad de rebote para scalping de 1-2%.
+
+Respondé SOLO con JSON:
+{{"comprar": true, "confianza": 8, "razon": "explicacion de 1 linea"}}
+
+Solo recomendá comprar si hay al menos 2 señales positivas y confianza >= 7."""
 
         respuesta = client_groq.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -144,7 +210,6 @@ def ejecutar_compra(par, monto):
 
 def ejecutar_venta(par, cantidad):
     try:
-        # Redondear cantidad segun reglas de Binance
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
         decimales = len(step.rstrip('0').split('.')[-1]) if '.' in step else 0
@@ -203,15 +268,13 @@ def mostrar_resumen():
     abiertas = [p for p in historial if p.get('estado') == 'abierta']
     g_pct = sum(p.get('ganancia_pct', 0) for p in ganancias)
     p_pct = sum(p.get('ganancia_pct', 0) for p in perdidas)
-    neto = g_pct + p_pct
-    print(f"  Ganancias: {len(ganancias)} (+{g_pct:.2f}%) | Perdidas: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {neto:+.2f}%")
+    print(f"  Ganancias: {len(ganancias)} (+{g_pct:.2f}%) | Perdidas: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}%")
 
 def main():
     print("="*60)
-    print("  BOT SCALPING INTELIGENTE - Binance + Groq")
+    print("  BOT SCALPING PRO - RSI + MACD + Bollinger + Groq")
     print("="*60)
-    print(f"  Take Profit: {TAKE_PROFIT*100}% | Stop Loss: {STOP_LOSS*100}%")
-    print(f"  Monto: ${MONTO_POR_ORDEN} | Max posiciones: {MAX_POSICIONES}")
+    print(f"  TP: {TAKE_PROFIT*100}% | SL: {STOP_LOSS*100}% | Max posiciones: {MAX_POSICIONES}")
     mostrar_resumen()
     print("="*60)
 
@@ -221,32 +284,37 @@ def main():
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
 
     if posiciones_abiertas >= MAX_POSICIONES:
-        print(f"\nMaximo de posiciones abiertas. Esperando cierres.")
+        print(f"\nMaximo de posiciones abiertas ({MAX_POSICIONES}). Esperando cierres.")
         return
 
-    print(f"\nEscaneando mercado Binance en tiempo real...")
+    print(f"\nEscaneando mercado...")
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
-        print("No se pudo obtener datos del mercado.")
         return
 
     candidatos = filtrar_candidatos(mejores_pares)
-    print(f"{len(candidatos)} candidatos con caidas recientes encontrados\n")
+    print(f"{len(candidatos)} candidatos encontrados\n")
 
     if not candidatos:
-        print("No hay caidas interesantes ahora. Esperando...")
+        print("Sin caidas interesantes ahora.")
         return
 
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
 
+        ya_tiene = any(p['par'] == c['par'] and p['estado'] == 'abierta' for p in historial)
+        if ya_tiene:
+            continue
+
         par = c['par']
-        print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}% | Vol: ${c['volumen']:,.0f}")
+        print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}%")
 
         datos = obtener_datos_mercado(par)
         if not datos:
             continue
+
+        print(f"  RSI: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'} | BB: {'cerca piso' if datos['precio_actual'] <= datos['bb_inf'] * 1.005 else 'normal'}")
 
         analisis = analizar_con_groq(datos, c['cambio_24h'])
         if not analisis:
@@ -261,6 +329,7 @@ def main():
                     'precio_compra': precio,
                     'cantidad': cantidad,
                     'monto': MONTO_POR_ORDEN,
+                    'rsi_entrada': datos['rsi'],
                     'confianza': analisis.get('confianza'),
                     'razon': analisis.get('razon'),
                     'estado': 'abierta',
@@ -271,7 +340,7 @@ def main():
         else:
             print(f"  Descartado (confianza: {analisis.get('confianza','?')}/10)")
 
-        time.sleep(0.3)
+        time.sleep(0.5)
 
     print(f"\n{'='*60}")
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
