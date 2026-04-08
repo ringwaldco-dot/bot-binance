@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from binance.client import Client
 from groq import Groq
 
+# ← NUEVO: importar el módulo on-chain
+from onchain_sentiment import get_onchain_signal, format_signal_telegram
+
 load_dotenv()
 
 BINANCE_API_KEY = os.getenv('BINANCE_API_KEY')
@@ -181,7 +184,7 @@ def calcular_monto_diversificado(historial, capital_disponible):
     return round(monto, 2)
 
 # ============================================================
-# REPORTE DIARIO
+# REPORTE DIARIO — agrega resumen on-chain a las 8am
 # ============================================================
 def enviar_reporte_diario():
     try:
@@ -222,6 +225,23 @@ def enviar_reporte_diario():
 ━━━━━━━━━━━━━━━━━━━━
 🤖 Bot operando normalmente"""
         enviar_telegram(reporte)
+
+        # ← NUEVO: resumen on-chain de BTC y ETH junto al reporte
+        try:
+            sig_btc = get_onchain_signal("BTCUSDT")
+            sig_eth = get_onchain_signal("ETHUSDT")
+            resumen = (
+                f"📡 <b>Sentiment On-Chain — apertura del día</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"BTC {sig_btc['emoji']} <code>{sig_btc['score']:+.3f}</code> {sig_btc['action']}\n"
+                f"ETH {sig_eth['emoji']} <code>{sig_eth['score']:+.3f}</code> {sig_eth['action']}\n"
+                f"Fear &amp; Greed: <code>{sig_btc['components']['fear_greed']['value']}</code> "
+                f"({sig_btc['components']['fear_greed']['label']})"
+            )
+            enviar_telegram(resumen)
+        except Exception as e:
+            print(f"  Error onchain en reporte: {e}")
+
         with open(REPORTE_FILE, "w") as f:
             json.dump({'fecha': hoy}, f)
     except Exception as e:
@@ -350,7 +370,8 @@ def es_caida_libre(par, cambio_24h):
     except:
         return False
 
-def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_par):
+# ← NUEVO: acepta onchain_score como parámetro extra
+def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_par, onchain_score=0.0):
     try:
         rsi_5m = datos_5m['rsi']
         rsi_1h = datos_1h['rsi']
@@ -358,6 +379,18 @@ def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_p
         macd_alcista_1h = datos_1h['macd'] > datos_1h['macd_signal']
         bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
+
+        # ← NUEVO: descripción en lenguaje natural del score on-chain para el prompt
+        if onchain_score >= 0.35:
+            onchain_desc = f"ALCISTA ({onchain_score:+.2f}) — presión compradora, funding ok"
+        elif onchain_score >= 0.15:
+            onchain_desc = f"LEVEMENTE ALCISTA ({onchain_score:+.2f}) — señales mixtas positivas"
+        elif onchain_score <= -0.35:
+            onchain_desc = f"BAJISTA ({onchain_score:+.2f}) — alta presión vendedora, evitar longs"
+        elif onchain_score <= -0.15:
+            onchain_desc = f"LEVEMENTE BAJISTA ({onchain_score:+.2f}) — precaución"
+        else:
+            onchain_desc = f"NEUTRO ({onchain_score:+.2f}) — sin sesgo claro"
 
         prompt = f"""Sos un trader experto en crypto scalping.
 
@@ -376,11 +409,16 @@ TIMEFRAME 1 HORA:
 - MACD: {'ALCISTA' if macd_alcista_1h else 'BAJISTA'}
 - Bollinger: {'CERCA DEL PISO' if bb_1h else 'zona media'}
 
+SENTIMENT ON-CHAIN (futuros + mercado):
+- {onchain_desc}
+
 Reglas:
 - Solo comprá si AMBOS timeframes tienen al menos 1 señal positiva
 - Si score_par < 30, sé MUY conservador
 - Si score_par > 70, podés ser más agresivo
 - En modo nocturno, solo entrá si hay 2+ señales en ambos timeframes
+- Si on-chain es BAJISTA, exigí señales técnicas MUY fuertes para comprar
+- Si on-chain es ALCISTA, podés ser ligeramente más permisivo
 
 Respondé SOLO con JSON:
 {{"comprar": true, "confianza": 8, "razon": "1 linea"}}"""
@@ -603,7 +641,7 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # PUMPS - primera prioridad
+    # ── PUMPS ────────────────────────────────────────────────────────────────
     if modo != 'nocturno':
         print(f"\nDetectando pumps...")
         pumps = detectar_pumps(mejores_pares)
@@ -621,15 +659,34 @@ def main():
                 continue
             if es_caida_libre(par, p['cambio_24h']):
                 continue
+
+            # ← NUEVO: chequeo on-chain antes de entrar al pump
+            sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
+            try:
+                sig = get_onchain_signal(par)
+                print(f"  OnChain: {sig['action']} ({sig['score']:+.3f})")
+                if sig['block']:
+                    print(f"  BLOQUEADO por sentiment on-chain")
+                    continue
+            except Exception as e:
+                print(f"  OnChain error (ignorando): {e}")
+
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 continue
+
+            # ← NUEVO: reducir monto 30% si on-chain es levemente negativo
+            if sig['action'] == 'SLIGHT_SHORT':
+                monto = round(monto * 0.7, 2)
+                print(f"  Monto reducido a ${monto} por on-chain negativo")
+
             exito, cantidad, precio = ejecutar_compra(par, monto, datos)
             if exito:
                 historial.append({
                     'par': par, 'precio_compra': precio, 'precio_maximo': precio,
                     'cantidad': cantidad, 'monto': monto, 'rsi_entrada': datos['rsi'],
                     'confianza': 9, 'razon': f"PUMP +{p['cambio_5m']}% vol {p['ratio_volumen']}x",
+                    'onchain_score': sig['score'],   # ← NUEVO
                     'estado': 'abierta', 'estrategia': 'pump',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
@@ -637,9 +694,13 @@ def main():
                 posiciones_abiertas += 1
                 pares_en_uso.add(par)
                 capital_disponible -= monto
-                enviar_telegram(f"🚀 <b>PUMP</b> {par}\n+{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}\n💰 ${monto}")
+                enviar_telegram(
+                    f"🚀 <b>PUMP</b> {par}\n"
+                    f"+{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}\n"
+                    f"💰 ${monto} | OnChain: {sig['emoji']} {sig['score']:+.3f}"  # ← NUEVO
+                )
 
-    # SCALPING - segunda prioridad
+    # ── SCALPING ─────────────────────────────────────────────────────────────
     candidatos = filtrar_candidatos(mejores_pares, modo)
     print(f"\n{len(candidatos)} candidatos scalping\n")
 
@@ -656,6 +717,17 @@ def main():
             print(f"  Caida libre, saltando")
             continue
 
+        # ← NUEVO: chequeo on-chain antes de pedir datos técnicos
+        sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
+        try:
+            sig = get_onchain_signal(par)
+            print(f"  OnChain: {sig['action']} ({sig['score']:+.3f})")
+            if sig['block']:
+                print(f"  BLOQUEADO por on-chain, saltando")
+                continue
+        except Exception as e:
+            print(f"  OnChain error (ignorando): {e}")
+
         datos_5m = obtener_datos_mercado(par, '5m', 50)
         datos_1h = obtener_datos_mercado(par, '1h', 50)
         if not datos_5m or not datos_1h:
@@ -668,15 +740,29 @@ def main():
             print(f"  Sin confirmacion: {razon_tf}")
             continue
 
-        analisis = analizar_sentimiento_groq(par, datos_5m, datos_1h, c['cambio_24h'], modo, score)
+        # ← NUEVO: pasar onchain_score al prompt de Groq
+        analisis = analizar_sentimiento_groq(
+            par, datos_5m, datos_1h, c['cambio_24h'], modo, score,
+            onchain_score=sig['score']
+        )
         if not analisis:
             continue
 
+        # ← NUEVO: subir umbral de confianza si on-chain es negativo
         confianza_minima = 8 if modo == 'nocturno' else 7
+        if sig['action'] == 'SLIGHT_SHORT':
+            confianza_minima = min(9, confianza_minima + 1)
+            print(f"  Umbral subido a {confianza_minima}/10 por on-chain negativo")
+
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 continue
+
+            # ← NUEVO: reducir monto si on-chain no acompaña
+            if sig['action'] == 'SLIGHT_SHORT':
+                monto = round(monto * 0.7, 2)
+
             print(f"  ENTRADA! {analisis['confianza']}/10 | {analisis.get('razon','')} | ${monto}")
             exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
             if exito:
@@ -686,6 +772,8 @@ def main():
                     'rsi_entrada': datos_5m['rsi'], 'rsi_1h_entrada': datos_1h['rsi'],
                     'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
                     'score_entrada': score, 'modo': modo,
+                    'onchain_score': sig['score'],    # ← NUEVO
+                    'onchain_action': sig['action'],  # ← NUEVO
                     'estado': 'abierta', 'estrategia': 'scalp',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
@@ -701,7 +789,7 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')} | Modo: {modo}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📊 Análisis completo activado")
+    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📡 Sentiment On-Chain activado\n📊 Análisis completo activado")
     while True:
         try:
             main()
