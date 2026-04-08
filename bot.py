@@ -17,11 +17,14 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 TELEGRAM_TOKEN = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
 TELEGRAM_CHAT_ID = "1576867878"
 
-MONTO_POR_ORDEN = 10.0
+CAPITAL_TOTAL = 30.0
+MAX_POSICIONES = 3
+MONTO_POR_ORDEN = CAPITAL_TOTAL / MAX_POSICIONES
 TAKE_PROFIT = 0.012
 TAKE_PROFIT_PUMP = 0.025
 STOP_LOSS = 0.008
-MAX_POSICIONES = 3
+TRAILING_STOP = 0.006
+MAX_CAPITAL_POR_PAR = 0.4
 HISTORIAL_FILE = "historial_binance.json"
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -50,6 +53,29 @@ def obtener_precio(par):
         return float(ticker['price'])
     except:
         return None
+
+def obtener_capital_disponible():
+    try:
+        account = client_binance.get_account()
+        for b in account['balances']:
+            if b['asset'] == 'USDT':
+                return float(b['free'])
+        return 0
+    except:
+        return 0
+
+def calcular_monto_diversificado(historial, capital_disponible):
+    posiciones_abiertas = [p for p in historial if p.get('estado') == 'abierta']
+    if not posiciones_abiertas:
+        return min(MONTO_POR_ORDEN, capital_disponible * 0.9)
+    capital_en_uso = sum(p.get('monto', MONTO_POR_ORDEN) for p in posiciones_abiertas)
+    capital_libre = capital_disponible
+    if capital_libre < 5:
+        return 0
+    monto = min(MONTO_POR_ORDEN, capital_libre * 0.9)
+    if monto < 5:
+        return 0
+    return round(monto, 2)
 
 def calcular_rsi(precios, periodo=14):
     if len(precios) < periodo + 1:
@@ -245,12 +271,11 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         cantidad = round(cantidad, decimales)
         orden = client_binance.order_market_sell(symbol=par, quantity=cantidad)
         print(f"   VENTA OK! ID: {orden['orderId']}")
-        if tipo == 'ganancia':
-            enviar_telegram(f"✅ <b>TAKE PROFIT</b> {par}\n📈 Ganancia: +{pct}%\n💰 Precio: ${precio_actual}")
-        elif tipo == 'pump':
-            enviar_telegram(f"🚀 <b>PUMP PROFIT</b> {par}\n📈 Ganancia: +{pct}%\n💰 Precio: ${precio_actual}")
-        else:
-            enviar_telegram(f"🔴 <b>STOP LOSS</b> {par}\n📉 Pérdida: {pct}%\n💰 Precio: ${precio_actual}")
+        emojis = {'ganancia': '✅', 'pump': '🚀', 'trailing': '📉', 'perdida': '🔴'}
+        nombres = {'ganancia': 'TAKE PROFIT', 'pump': 'PUMP PROFIT', 'trailing': 'TRAILING STOP', 'perdida': 'STOP LOSS'}
+        emoji = emojis.get(tipo, '✅')
+        nombre = nombres.get(tipo, 'VENTA')
+        enviar_telegram(f"{emoji} <b>{nombre}</b> {par}\n📈 {'Ganancia' if pct > 0 else 'Pérdida'}: {pct:+.3f}%\n💰 Precio: ${precio_actual}")
         return True
     except Exception as e:
         print(f"   Error vendiendo: {e}")
@@ -274,8 +299,29 @@ def revisar_posiciones():
         pct = round(cambio * 100, 3)
         estrategia = pos.get('estrategia', 'scalp')
         tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else TAKE_PROFIT
-        print(f"  {pos['par']} [{estrategia}] | Compra: {precio_compra} | Actual: {precio_actual} | {pct:+.3f}% | TP: {tp*100}%")
-        if cambio >= tp:
+
+        # Actualizar precio maximo para trailing stop
+        precio_maximo = float(pos.get('precio_maximo', precio_compra))
+        if precio_actual > precio_maximo:
+            precio_maximo = precio_actual
+            historial[i]['precio_maximo'] = precio_maximo
+
+        # Calcular trailing stop
+        caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
+        ganancia_actual = (precio_actual - precio_compra) / precio_compra
+        trailing_activado = ganancia_actual >= TAKE_PROFIT and caida_desde_maximo >= TRAILING_STOP
+
+        print(f"  {pos['par']} [{estrategia}] | Compra: {precio_compra:.4f} | Actual: {precio_actual:.4f} | {pct:+.3f}% | Max: {precio_maximo:.4f}")
+
+        if trailing_activado:
+            print(f"  TRAILING STOP! Cayó {caida_desde_maximo*100:.2f}% desde máximo. Ganancia: +{pct}%")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
+                historial[i]['estado'] = 'cerrada_ganancia'
+                historial[i]['precio_venta'] = precio_actual
+                historial[i]['ganancia_pct'] = pct
+                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cerradas += 1
+        elif cambio >= tp:
             print(f"  TAKE PROFIT +{pct}%!")
             tipo_venta = 'pump' if estrategia == 'pump' else 'ganancia'
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, tipo_venta):
@@ -293,7 +339,8 @@ def revisar_posiciones():
                 historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cerradas += 1
         else:
-            print(f"  Manteniendo...")
+            print(f"  Manteniendo... (trailing en {caida_desde_maximo*100:.2f}% desde max)")
+
     guardar_historial(historial)
     return cerradas
 
@@ -310,9 +357,9 @@ def mostrar_resumen():
 
 def main():
     print("="*60)
-    print("  BOT SCALPING PRO + PUMP DETECTOR - Binance + Groq")
+    print("  BOT PRO - Pump + Scalping + Trailing + Diversificacion")
     print("="*60)
-    print(f"  TP Scalp: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}%")
+    print(f"  TP: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}% | Trail: {TRAILING_STOP*100}%")
     mostrar_resumen()
     print("="*60)
 
@@ -322,13 +369,24 @@ def main():
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
 
     if posiciones_abiertas >= MAX_POSICIONES:
-        print(f"\nMaximo de posiciones abiertas. Esperando cierres.")
+        print(f"\nMaximo de posiciones abiertas ({MAX_POSICIONES}). Esperando cierres.")
+        return
+
+    # Verificar capital disponible
+    capital_disponible = obtener_capital_disponible()
+    print(f"\nCapital USDT disponible: ${capital_disponible:.2f}")
+
+    if capital_disponible < 5:
+        print("Capital insuficiente para operar.")
         return
 
     print(f"\nEscaneando mercado...")
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
         return
+
+    # Pares ya en posición abierta — no duplicar
+    pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
     # DETECTOR DE PUMPS - primera prioridad
     print(f"\nDetectando pumps...")
@@ -338,23 +396,27 @@ def main():
     for p in pumps:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
-        ya_tiene = any(pos['par'] == p['par'] and pos['estado'] == 'abierta' for pos in historial)
-        if ya_tiene:
+        if p['par'] in pares_en_uso:
             continue
         par = p['par']
         print(f"PUMP! {par} | +{p['cambio_5m']}% en 5min | Volumen {p['ratio_volumen']}x")
         datos = obtener_datos_mercado(par)
         if not datos or datos['rsi'] > 72:
-            print(f"  RSI muy alto ({datos['rsi'] if datos else '?'}), saltando")
+            print(f"  RSI muy alto, saltando")
             continue
-        print(f"  RSI: {datos['rsi']} OK - ENTRANDO!")
-        exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN, datos)
+        monto = calcular_monto_diversificado(historial, capital_disponible)
+        if monto == 0:
+            print("  Capital insuficiente")
+            continue
+        print(f"  RSI: {datos['rsi']} OK - ENTRANDO con ${monto}!")
+        exito, cantidad, precio = ejecutar_compra(par, monto, datos)
         if exito:
             historial.append({
                 'par': par,
                 'precio_compra': precio,
+                'precio_maximo': precio,
                 'cantidad': cantidad,
-                'monto': MONTO_POR_ORDEN,
+                'monto': monto,
                 'rsi_entrada': datos['rsi'],
                 'confianza': 9,
                 'razon': f"PUMP +{p['cambio_5m']}% en 5min, volumen {p['ratio_volumen']}x",
@@ -364,7 +426,9 @@ def main():
             })
             guardar_historial(historial)
             posiciones_abiertas += 1
-            enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x el promedio\n💰 Comprando ${MONTO_POR_ORDEN}")
+            pares_en_uso.add(par)
+            capital_disponible -= monto
+            enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x\n💰 Monto: ${monto}")
 
     # SCALPING NORMAL - segunda prioridad
     candidatos = filtrar_candidatos(mejores_pares)
@@ -373,8 +437,7 @@ def main():
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
-        ya_tiene = any(p['par'] == c['par'] and p['estado'] == 'abierta' for p in historial)
-        if ya_tiene:
+        if c['par'] in pares_en_uso:
             continue
         par = c['par']
         print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}%")
@@ -386,14 +449,19 @@ def main():
         if not analisis:
             continue
         if analisis.get('comprar') and analisis.get('confianza', 0) >= 7:
-            print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')}")
-            exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN, datos)
+            monto = calcular_monto_diversificado(historial, capital_disponible)
+            if monto == 0:
+                print("  Capital insuficiente")
+                continue
+            print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')} | Monto: ${monto}")
+            exito, cantidad, precio = ejecutar_compra(par, monto, datos)
             if exito:
                 historial.append({
                     'par': par,
                     'precio_compra': precio,
+                    'precio_maximo': precio,
                     'cantidad': cantidad,
-                    'monto': MONTO_POR_ORDEN,
+                    'monto': monto,
                     'rsi_entrada': datos['rsi'],
                     'confianza': analisis.get('confianza'),
                     'razon': analisis.get('razon'),
@@ -403,6 +471,8 @@ def main():
                 })
                 guardar_historial(historial)
                 posiciones_abiertas += 1
+                pares_en_uso.add(par)
+                capital_disponible -= monto
         else:
             print(f"  Descartado (confianza: {analisis.get('confianza','?')}/10)")
         time.sleep(0.5)
@@ -411,11 +481,11 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance PRO iniciado</b>\n🚀 Pump Detector + Scalping RSI/MACD/Bollinger\nEscaneando cada 2 minutos...")
+    enviar_telegram("🤖 <b>Bot Binance ULTRA PRO</b>\n🚀 Pump + Scalping + Trailing Stop + Diversificación\nEscaneando cada 2 minutos...")
     while True:
         try:
             main()
         except Exception as e:
             print(f"Error: {e}")
-            enviar_telegram(f"⚠️ Error en el bot: {e}")
+            enviar_telegram(f"⚠️ Error: {e}")
         time.sleep(120)
