@@ -26,6 +26,7 @@ TAKE_PROFIT = 0.012
 TAKE_PROFIT_PUMP = 0.025
 STOP_LOSS = 0.008
 TRAILING_STOP = 0.006
+CRASH_THRESHOLD = -8.0
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
@@ -216,9 +217,9 @@ def calcular_bollinger(precios, periodo=20):
     std = np.std(ultimos)
     return media + 2 * std, media, media - 2 * std
 
-def obtener_datos_mercado(par):
+def obtener_datos_mercado(par, intervalo='5m', limite=50):
     try:
-        klines = client_binance.get_klines(symbol=par, interval='5m', limit=50)
+        klines = client_binance.get_klines(symbol=par, interval=intervalo, limit=limite)
         precios = [float(k[4]) for k in klines]
         volumenes = [float(k[5]) for k in klines]
         precio_actual = precios[-1]
@@ -242,6 +243,110 @@ def obtener_datos_mercado(par):
             'precios': precios
         }
     except:
+        return None
+
+def confirmar_dos_timeframes(par):
+    """Confirma señal en 5min y 1h antes de entrar"""
+    try:
+        datos_5m = obtener_datos_mercado(par, '5m', 50)
+        datos_1h = obtener_datos_mercado(par, '1h', 50)
+        if not datos_5m or not datos_1h:
+            return False, "No se pudieron obtener datos"
+
+        # Señales en 5 minutos
+        rsi_5m = datos_5m['rsi']
+        macd_5m = datos_5m['macd'] > datos_5m['macd_signal']
+        bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
+
+        # Señales en 1 hora
+        rsi_1h = datos_1h['rsi']
+        macd_1h = datos_1h['macd'] > datos_1h['macd_signal']
+        bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
+
+        señales_5m = sum([rsi_5m < 40, macd_5m, bb_5m])
+        señales_1h = sum([rsi_1h < 50, macd_1h, bb_1h])
+
+        confirmado = señales_5m >= 1 and señales_1h >= 1
+        razon = f"5m: {señales_5m}/3 señales | 1h: {señales_1h}/3 señales"
+        return confirmado, razon
+    except:
+        return False, "Error en confirmacion"
+
+def es_caida_libre(par, cambio_24h):
+    """Detecta si es una caida libre real vs una correccion temporal"""
+    try:
+        klines_1h = client_binance.get_klines(symbol=par, interval='1h', limit=24)
+        precios_1h = [float(k[4]) for k in klines_1h]
+
+        # Caida en las ultimas 6 horas
+        caida_6h = ((precios_1h[-1] - precios_1h[-6]) / precios_1h[-6]) * 100
+        # Caida en las ultimas 12 horas
+        caida_12h = ((precios_1h[-1] - precios_1h[-12]) / precios_1h[-12]) * 100
+        # Caida acelerando (cada hora cae mas)
+        caidas_por_hora = [((precios_1h[i] - precios_1h[i-1]) / precios_1h[i-1]) * 100 for i in range(-4, 0)]
+        acelerando = all(c < -0.3 for c in caidas_por_hora)
+
+        es_crash = (
+            caida_6h < CRASH_THRESHOLD or
+            caida_12h < CRASH_THRESHOLD * 1.5 or
+            acelerando
+        )
+
+        if es_crash:
+            print(f"  CRASH DETECTADO: 6h={caida_6h:.1f}% 12h={caida_12h:.1f}% acelerando={acelerando}")
+        return es_crash
+    except:
+        return False
+
+def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h):
+    """Analiza con Groq usando datos de ambos timeframes"""
+    try:
+        rsi_5m = datos_5m['rsi']
+        rsi_1h = datos_1h['rsi']
+        macd_alcista_5m = datos_5m['macd'] > datos_5m['macd_signal']
+        macd_alcista_1h = datos_1h['macd'] > datos_1h['macd_signal']
+        bb_5m = datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005
+        bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
+
+        prompt = f"""Sos un trader experto en crypto scalping con análisis técnico avanzado.
+Analizás DOS timeframes antes de decidir.
+
+Par: {par}
+Cambio 24h: {cambio_24h}%
+
+TIMEFRAME 5 MINUTOS:
+- RSI: {rsi_5m} {'(SOBREVENTA)' if rsi_5m < 35 else '(neutral)' if rsi_5m < 50 else '(sobrecompra)'}
+- MACD: {'ALCISTA' if macd_alcista_5m else 'BAJISTA'}
+- Bollinger: {'CERCA DEL PISO' if bb_5m else 'zona media'}
+
+TIMEFRAME 1 HORA:
+- RSI: {rsi_1h} {'(SOBREVENTA)' if rsi_1h < 40 else '(neutral)' if rsi_1h < 55 else '(sobrecompra)'}
+- MACD: {'ALCISTA' if macd_alcista_1h else 'BAJISTA'}
+- Bollinger: {'CERCA DEL PISO' if bb_1h else 'zona media'}
+
+Reglas estrictas:
+- Solo comprá si AMBOS timeframes tienen al menos 1 señal positiva
+- Si el RSI de 1h es mayor a 60, NO compres
+- Si el MACD de 1h es bajista y el RSI de 1h mayor a 50, NO compres
+
+Respondé SOLO con JSON:
+{{"comprar": true, "confianza": 8, "razon": "1 linea"}}"""
+
+        respuesta = client_groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=150
+        )
+        texto = respuesta.choices[0].message.content.strip()
+        texto = texto.replace('```json', '').replace('```', '').strip()
+        inicio = texto.find('{')
+        fin = texto.rfind('}')
+        if inicio != -1 and fin != -1:
+            texto = texto[inicio:fin+1]
+        return json.loads(texto)
+    except Exception as e:
+        print(f"   Error Groq: {e}")
         return None
 
 def obtener_mejores_pares():
@@ -303,62 +408,13 @@ def detectar_pumps(pares_tickers):
     pumps.sort(key=lambda x: x['ratio_volumen'], reverse=True)
     return pumps[:5]
 
-def analizar_con_groq(datos, cambio_24h):
-    try:
-        rsi = datos['rsi']
-        macd = datos['macd']
-        signal = datos['macd_signal']
-        precio = datos['precio_actual']
-        bb_inf = datos['bb_inf']
-        cerca_bb_inf = precio <= bb_inf * 1.005
-        rsi_sobreventa = rsi < 35
-        macd_alcista = macd > signal
-        volumen_alto = datos['volumen_ratio'] > 1.2
-
-        prompt = f"""Sos un trader experto en crypto scalping con análisis técnico avanzado.
-
-Par: {datos['par']}
-Precio: {precio}
-Cambio 1h: {datos['cambio_1h']}%
-Cambio 24h: {cambio_24h}%
-
-INDICADORES:
-- RSI: {rsi} {'(SOBREVENTA)' if rsi_sobreventa else '(neutral)' if rsi < 50 else '(sobrecompra)'}
-- MACD: {'ALCISTA' if macd_alcista else 'BAJISTA'}
-- Bollinger: {'CERCA DEL PISO' if cerca_bb_inf else 'zona media'}
-- Volumen: {round(datos['volumen_ratio'], 2)}x {'(ALTO)' if volumen_alto else '(normal)'}
-
-Señales positivas: {sum([rsi_sobreventa, macd_alcista, cerca_bb_inf, volumen_alto])}/4
-
-Respondé SOLO con JSON:
-{{"comprar": true, "confianza": 8, "razon": "1 linea"}}
-
-Solo recomendá comprar si hay al menos 2 señales positivas."""
-
-        respuesta = client_groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=150
-        )
-        texto = respuesta.choices[0].message.content.strip()
-        texto = texto.replace('```json', '').replace('```', '').strip()
-        inicio = texto.find('{')
-        fin = texto.rfind('}')
-        if inicio != -1 and fin != -1:
-            texto = texto[inicio:fin+1]
-        return json.loads(texto)
-    except Exception as e:
-        print(f"   Error Groq: {e}")
-        return None
-
 def ejecutar_compra(par, monto, datos):
     try:
         orden = client_binance.order_market_buy(symbol=par, quoteOrderQty=monto)
         qty = float(orden['executedQty'])
         precio = float(orden['fills'][0]['price']) if orden.get('fills') else obtener_precio(par)
         print(f"   COMPRA OK! {qty} {par} a ${precio}")
-        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'}\n💵 Monto: ${monto}")
+        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI 5m: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'}\n💵 Monto: ${monto}")
         return True, qty, precio
     except Exception as e:
         print(f"   Error comprando: {e}")
@@ -458,7 +514,7 @@ def mostrar_resumen():
 
 def main():
     print("="*60)
-    print("  BOT ELITE - Pump+Scalping+Trailing+Blacklist+Dinamico")
+    print("  BOT ELITE MAX - 2 Timeframes + Anti-Crash + Sentimiento")
     print("="*60)
     print(f"  TP: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}% | Trail: {TRAILING_STOP*100}%")
     mostrar_resumen()
@@ -488,6 +544,7 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
+    # DETECTOR DE PUMPS
     print(f"\nDetectando pumps...")
     pumps = detectar_pumps(mejores_pares)
     print(f"{len(pumps)} pumps detectados\n")
@@ -502,6 +559,9 @@ def main():
         datos = obtener_datos_mercado(par)
         if not datos or datos['rsi'] > 72:
             print(f"  RSI muy alto, saltando")
+            continue
+        if es_caida_libre(par, p['cambio_24h']):
+            print(f"  CAIDA LIBRE detectada, saltando")
             continue
         monto = calcular_monto_diversificado(historial, capital_disponible)
         if monto == 0:
@@ -529,6 +589,7 @@ def main():
             capital_disponible -= monto
             enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x\n💰 Monto: ${monto}")
 
+    # SCALPING CON DOBLE TIMEFRAME
     candidatos = filtrar_candidatos(mejores_pares)
     print(f"{len(candidatos)} candidatos scalping encontrados\n")
 
@@ -539,20 +600,41 @@ def main():
             continue
         par = c['par']
         print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}%")
-        datos = obtener_datos_mercado(par)
-        if not datos:
+
+        # Filtro anti-crash
+        if es_caida_libre(par, c['cambio_24h']):
+            print(f"  CAIDA LIBRE detectada, saltando")
             continue
-        print(f"  RSI: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'} | BB: {'cerca piso' if datos['precio_actual'] <= datos['bb_inf'] * 1.005 else 'normal'}")
-        analisis = analizar_con_groq(datos, c['cambio_24h'])
+
+        # Obtener datos de ambos timeframes
+        datos_5m = obtener_datos_mercado(par, '5m', 50)
+        datos_1h = obtener_datos_mercado(par, '1h', 50)
+        if not datos_5m or not datos_1h:
+            continue
+
+        print(f"  5m → RSI: {datos_5m['rsi']} | MACD: {'alcista' if datos_5m['macd'] > datos_5m['macd_signal'] else 'bajista'} | BB: {'piso' if datos_5m['precio_actual'] <= datos_5m['bb_inf'] * 1.005 else 'normal'}")
+        print(f"  1h → RSI: {datos_1h['rsi']} | MACD: {'alcista' if datos_1h['macd'] > datos_1h['macd_signal'] else 'bajista'} | BB: {'piso' if datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01 else 'normal'}")
+
+        # Confirmacion de 2 timeframes
+        confirmado, razon_tf = confirmar_dos_timeframes(par)
+        if not confirmado:
+            print(f"  Sin confirmacion doble timeframe: {razon_tf}")
+            continue
+
+        print(f"  Confirmacion OK: {razon_tf}")
+
+        # Analisis con Groq usando ambos timeframes
+        analisis = analizar_sentimiento_groq(par, datos_5m, datos_1h, c['cambio_24h'])
         if not analisis:
             continue
+
         if analisis.get('comprar') and analisis.get('confianza', 0) >= 7:
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 print("  Capital insuficiente")
                 continue
             print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')} | Monto: ${monto}")
-            exito, cantidad, precio = ejecutar_compra(par, monto, datos)
+            exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
             if exito:
                 historial.append({
                     'par': par,
@@ -560,7 +642,8 @@ def main():
                     'precio_maximo': precio,
                     'cantidad': cantidad,
                     'monto': monto,
-                    'rsi_entrada': datos['rsi'],
+                    'rsi_entrada': datos_5m['rsi'],
+                    'rsi_1h_entrada': datos_1h['rsi'],
                     'confianza': analisis.get('confianza'),
                     'razon': analisis.get('razon'),
                     'estado': 'abierta',
@@ -579,7 +662,7 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance ELITE</b>\n🚀 Pump + Scalping + Trailing + Blacklist + Monto Dinámico\nReporte diario a las 8am 📊")
+    enviar_telegram("🤖 <b>Bot Binance ELITE MAX</b>\n📊 2 Timeframes + Anti-Crash + Blacklist + Trailing\nMáxima precisión activada 🎯")
     while True:
         try:
             main()
