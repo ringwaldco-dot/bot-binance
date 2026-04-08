@@ -2,6 +2,7 @@ import os
 import json
 import time
 import numpy as np
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
 from binance.client import Client
@@ -13,6 +14,9 @@ BINANCE_API_KEY = os.getenv('BINANCE_API_KEY')
 BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
+TELEGRAM_TOKEN = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
+TELEGRAM_CHAT_ID = "1576867878"
+
 MONTO_POR_ORDEN = 10.0
 TAKE_PROFIT = 0.012
 STOP_LOSS = 0.008
@@ -21,6 +25,13 @@ HISTORIAL_FILE = "historial_binance.json"
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
+
+def enviar_telegram(mensaje):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "HTML"})
+    except:
+        pass
 
 def cargar_historial():
     if os.path.exists(HISTORIAL_FILE):
@@ -52,6 +63,15 @@ def calcular_rsi(precios, periodo=14):
     rs = avg_ganancia / avg_perdida
     return 100 - (100 / (1 + rs))
 
+def calcular_ema(precios, periodo):
+    if len(precios) < periodo:
+        return precios[-1]
+    k = 2 / (periodo + 1)
+    ema = precios[0]
+    for precio in precios[1:]:
+        ema = precio * k + ema * (1 - k)
+    return ema
+
 def calcular_macd(precios):
     if len(precios) < 26:
         return 0, 0
@@ -62,24 +82,13 @@ def calcular_macd(precios):
     signal = calcular_ema(np.array([macd] * 9), 9)
     return macd, signal
 
-def calcular_ema(precios, periodo):
-    if len(precios) < periodo:
-        return precios[-1]
-    k = 2 / (periodo + 1)
-    ema = precios[0]
-    for precio in precios[1:]:
-        ema = precio * k + ema * (1 - k)
-    return ema
-
 def calcular_bollinger(precios, periodo=20):
     if len(precios) < periodo:
         return precios[-1], precios[-1], precios[-1]
     ultimos = precios[-periodo:]
     media = np.mean(ultimos)
     std = np.std(ultimos)
-    banda_sup = media + 2 * std
-    banda_inf = media - 2 * std
-    return banda_sup, media, banda_inf
+    return media + 2 * std, media, media - 2 * std
 
 def obtener_datos_mercado(par):
     try:
@@ -88,19 +97,15 @@ def obtener_datos_mercado(par):
         volumenes = [float(k[5]) for k in klines]
         precio_actual = precios[-1]
         cambio_1h = ((precios[-1] - precios[-12]) / precios[-12]) * 100
-        cambio_4h = ((precios[-1] - precios[-48]) / precios[-48]) * 100 if len(precios) >= 48 else 0
-
         rsi = calcular_rsi(precios)
         macd, signal = calcular_macd(precios)
         banda_sup, media_bb, banda_inf = calcular_bollinger(precios)
         volumen_promedio = np.mean(volumenes[-10:])
         volumen_actual = volumenes[-1]
-
         return {
             'par': par,
             'precio_actual': precio_actual,
             'cambio_1h': round(cambio_1h, 3),
-            'cambio_4h': round(cambio_4h, 3),
             'rsi': round(rsi, 2),
             'macd': macd,
             'macd_signal': signal,
@@ -110,7 +115,7 @@ def obtener_datos_mercado(par):
             'volumen_ratio': volumen_actual / volumen_promedio if volumen_promedio > 0 else 1,
             'precios': precios
         }
-    except Exception as e:
+    except:
         return None
 
 def obtener_mejores_pares():
@@ -150,35 +155,30 @@ def analizar_con_groq(datos, cambio_24h):
         signal = datos['macd_signal']
         precio = datos['precio_actual']
         bb_inf = datos['bb_inf']
-        bb_sup = datos['bb_sup']
-        volumen_ratio = datos['volumen_ratio']
-
         cerca_bb_inf = precio <= bb_inf * 1.005
         rsi_sobreventa = rsi < 35
         macd_alcista = macd > signal
-        volumen_alto = volumen_ratio > 1.2
+        volumen_alto = datos['volumen_ratio'] > 1.2
 
-        prompt = f"""Sos un trader experto en crypto scalping con conocimiento avanzado de análisis técnico.
+        prompt = f"""Sos un trader experto en crypto scalping con análisis técnico avanzado.
 
 Par: {datos['par']}
 Precio: {precio}
 Cambio 1h: {datos['cambio_1h']}%
 Cambio 24h: {cambio_24h}%
 
-INDICADORES TÉCNICOS:
-- RSI: {rsi} {'(SOBREVENTA - buena señal de compra)' if rsi_sobreventa else '(neutral)' if rsi < 50 else '(sobrecompra)'}
-- MACD: {round(macd, 6)} | Signal: {round(signal, 6)} {'(ALCISTA)' if macd_alcista else '(BAJISTA)'}
-- Bollinger: Precio {'CERCA DEL PISO' if cerca_bb_inf else 'en zona media' if precio <= bb_inf * 1.02 else 'lejos del piso'}
-- Volumen: {round(volumen_ratio, 2)}x el promedio {'(ALTO)' if volumen_alto else '(normal)'}
+INDICADORES:
+- RSI: {rsi} {'(SOBREVENTA)' if rsi_sobreventa else '(neutral)' if rsi < 50 else '(sobrecompra)'}
+- MACD: {'ALCISTA' if macd_alcista else 'BAJISTA'}
+- Bollinger: {'CERCA DEL PISO' if cerca_bb_inf else 'zona media'}
+- Volumen: {round(datos['volumen_ratio'], 2)}x {'(ALTO)' if volumen_alto else '(normal)'}
 
-Señales positivas: RSI sobreventa={rsi_sobreventa}, MACD alcista={macd_alcista}, Cerca BB inferior={cerca_bb_inf}
-
-Analizá si hay alta probabilidad de rebote para scalping de 1-2%.
+Señales positivas: {sum([rsi_sobreventa, macd_alcista, cerca_bb_inf, volumen_alto])}/4
 
 Respondé SOLO con JSON:
-{{"comprar": true, "confianza": 8, "razon": "explicacion de 1 linea"}}
+{{"comprar": true, "confianza": 8, "razon": "1 linea"}}
 
-Solo recomendá comprar si hay al menos 2 señales positivas y confianza >= 7."""
+Solo recomendá comprar si hay al menos 2 señales positivas."""
 
         respuesta = client_groq.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -197,18 +197,19 @@ Solo recomendá comprar si hay al menos 2 señales positivas y confianza >= 7.""
         print(f"   Error Groq: {e}")
         return None
 
-def ejecutar_compra(par, monto):
+def ejecutar_compra(par, monto, datos):
     try:
         orden = client_binance.order_market_buy(symbol=par, quoteOrderQty=monto)
         qty = float(orden['executedQty'])
         precio = float(orden['fills'][0]['price']) if orden.get('fills') else obtener_precio(par)
         print(f"   COMPRA OK! {qty} {par} a ${precio}")
+        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'}\n💵 Monto: ${monto}")
         return True, qty, precio
     except Exception as e:
         print(f"   Error comprando: {e}")
         return False, 0, 0
 
-def ejecutar_venta(par, cantidad):
+def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     try:
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
@@ -216,6 +217,10 @@ def ejecutar_venta(par, cantidad):
         cantidad = round(cantidad, decimales)
         orden = client_binance.order_market_sell(symbol=par, quantity=cantidad)
         print(f"   VENTA OK! ID: {orden['orderId']}")
+        if tipo == 'ganancia':
+            enviar_telegram(f"✅ <b>TAKE PROFIT</b> {par}\n📈 Ganancia: +{pct}%\n💰 Precio: ${precio_actual}")
+        else:
+            enviar_telegram(f"🔴 <b>STOP LOSS</b> {par}\n📉 Pérdida: {pct}%\n💰 Precio: ${precio_actual}")
         return True
     except Exception as e:
         print(f"   Error vendiendo: {e}")
@@ -239,16 +244,16 @@ def revisar_posiciones():
         pct = round(cambio * 100, 3)
         print(f"  {pos['par']} | Compra: {precio_compra} | Actual: {precio_actual} | {pct:+.3f}%")
         if cambio >= TAKE_PROFIT:
-            print(f"  TAKE PROFIT +{pct}% VENDIENDO!")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0)):
+            print(f"  TAKE PROFIT +{pct}%!")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'ganancia'):
                 historial[i]['estado'] = 'cerrada_ganancia'
                 historial[i]['precio_venta'] = precio_actual
                 historial[i]['ganancia_pct'] = pct
                 historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cerradas += 1
         elif cambio <= -STOP_LOSS:
-            print(f"  STOP LOSS {pct}% VENDIENDO!")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0)):
+            print(f"  STOP LOSS {pct}%!")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
                 historial[i]['estado'] = 'cerrada_perdida'
                 historial[i]['precio_venta'] = precio_actual
                 historial[i]['ganancia_pct'] = pct
@@ -272,9 +277,9 @@ def mostrar_resumen():
 
 def main():
     print("="*60)
-    print("  BOT SCALPING PRO - RSI + MACD + Bollinger + Groq")
+    print("  BOT SCALPING PRO - RSI + MACD + Bollinger + Telegram")
     print("="*60)
-    print(f"  TP: {TAKE_PROFIT*100}% | SL: {STOP_LOSS*100}% | Max posiciones: {MAX_POSICIONES}")
+    print(f"  TP: {TAKE_PROFIT*100}% | SL: {STOP_LOSS*100}% | Max: {MAX_POSICIONES} posiciones")
     mostrar_resumen()
     print("="*60)
 
@@ -284,7 +289,7 @@ def main():
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
 
     if posiciones_abiertas >= MAX_POSICIONES:
-        print(f"\nMaximo de posiciones abiertas ({MAX_POSICIONES}). Esperando cierres.")
+        print(f"\nMaximo de posiciones abiertas. Esperando cierres.")
         return
 
     print(f"\nEscaneando mercado...")
@@ -322,7 +327,7 @@ def main():
 
         if analisis.get('comprar') and analisis.get('confianza', 0) >= 7:
             print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')}")
-            exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN)
+            exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN, datos)
             if exito:
                 historial.append({
                     'par': par,
@@ -346,9 +351,11 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
 
 if __name__ == "__main__":
+    enviar_telegram("🤖 <b>Bot Binance iniciado</b>\nEscaneando mercado cada 2 minutos...")
     while True:
         try:
             main()
         except Exception as e:
             print(f"Error: {e}")
+            enviar_telegram(f"⚠️ Error en el bot: {e}")
         time.sleep(120)
