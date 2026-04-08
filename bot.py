@@ -10,7 +10,8 @@ from binance.client import Client
 from groq import Groq
 
 from onchain_sentiment import get_onchain_signal, format_signal_telegram
-from market_monitor import MonitorMercado  # ← NUEVO
+from market_monitor import MonitorMercado
+from listing_detector import ListingDetector  # NUEVO
 
 load_dotenv()
 
@@ -35,11 +36,12 @@ HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
 RANKING_FILE = "ranking_pares.json"
-MONITOR_CICLO = 0  # ← NUEVO: contador para saber cuándo correr el monitor
+MONITOR_CICLO = 0
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
-monitor_mercado = MonitorMercado()  # ← NUEVO: instancia del monitor
+monitor_mercado = MonitorMercado()
+listing_detector = ListingDetector()  # NUEVO
 
 # ============================================================
 # MODO HORARIO
@@ -600,22 +602,14 @@ def mostrar_resumen():
     blacklist = cargar_blacklist()
     print(f"  G: {len(ganancias)} (+{g_pct:.2f}%) | P: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | BL: {len(blacklist)}")
 
-# ============================================================
-# ← NUEVO: procesar señales del monitor y operar si aplica
-# ============================================================
 def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_uso, posiciones_abiertas, tp_actual, sl_actual):
     for señal in señales:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
-
         par = señal['par_binance']
-
         if par in pares_en_uso or esta_en_blacklist(par):
             continue
-
-        print(f"\n  📡 Señal monitor: {par} | {señal['n_fuentes']} fuentes | Groq {señal['confianza_groq']}/10")
-
-        # Chequeo on-chain
+        print(f"\n  Señal monitor: {par} | {señal['n_fuentes']} fuentes | Groq {señal['confianza_groq']}/10")
         sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
         try:
             sig = get_onchain_signal(par)
@@ -624,17 +618,12 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
                 continue
         except:
             pass
-
-        # Verificar datos técnicos
         if es_caida_libre(par, señal['cambio_24h']):
             continue
-
         datos_5m = obtener_datos_mercado(par, '5m', 50)
         datos_1h = obtener_datos_mercado(par, '1h', 50)
         if not datos_5m or not datos_1h:
             continue
-
-        # Para señales del monitor usamos umbral de confianza más alto (8+)
         analisis = analizar_sentimiento_groq(
             par, datos_5m, datos_1h,
             señal['cambio_24h'], 'monitor',
@@ -642,18 +631,14 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
             onchain_score=sig['score']
         )
         if not analisis or not analisis.get('comprar') or analisis.get('confianza', 0) < 8:
-            print(f"  Monitor descartado por Groq ({analisis.get('confianza','?') if analisis else '?'}/10)")
+            print(f"  Monitor descartado ({analisis.get('confianza','?') if analisis else '?'}/10)")
             continue
-
         monto = calcular_monto_diversificado(historial, capital_disponible)
         if monto == 0:
             continue
-
-        # Monto conservador para señales de monitor (máximo 70% del normal)
         monto = round(monto * 0.7, 2)
         if monto < MONTO_MIN:
             continue
-
         print(f"  ENTRADA MONITOR! {analisis['confianza']}/10 | ${monto}")
         exito, cantidad, precio = ejecutar_compra(par, monto, datos_5m)
         if exito:
@@ -672,7 +657,6 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
             posiciones_abiertas += 1
             pares_en_uso.add(par)
             capital_disponible -= monto
-
     return posiciones_abiertas, capital_disponible
 
 # ============================================================
@@ -713,11 +697,11 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # ← NUEVO: correr monitor cada 5 ciclos (~10 minutos)
+    # MONITOR AMPLIO cada 5 ciclos (~10 minutos)
     MONITOR_CICLO += 1
     if MONITOR_CICLO >= 5:
         MONITOR_CICLO = 0
-        print(f"\n📡 Corriendo monitor de mercado amplio...")
+        print(f"\nCorriendo monitor de mercado amplio...")
         try:
             señales = monitor_mercado.escanear()
             if señales and posiciones_abiertas < MAX_POSICIONES:
@@ -728,12 +712,67 @@ def main():
         except Exception as e:
             print(f"  Error monitor: {e}")
 
-    # ── PUMPS ─────────────────────────────────────────────────
+    # DETECTOR DE NUEVOS LISTINGS (cada ciclo)
+    if posiciones_abiertas < MAX_POSICIONES:
+        try:
+            nuevos_listings = listing_detector.detectar_nuevos()
+            for listing in nuevos_listings:
+                if posiciones_abiertas >= MAX_POSICIONES:
+                    break
+                par = listing['par']
+                if par in pares_en_uso or esta_en_blacklist(par):
+                    continue
+                print(f"  NUEVO LISTING! {par} | ${listing['precio']} | {listing['cambio_24h']}%")
+                enviar_telegram(
+                    f"🆕 <b>NUEVO LISTING BINANCE</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Par: <b>{par}</b>\n"
+                    f"Precio: <code>${listing['precio']}</code>\n"
+                    f"Vol 24h: <code>${listing['volumen_24h']:,.0f}</code>\n"
+                    f"Cambio: <code>{listing['cambio_24h']:+.2f}%</code>\n"
+                    f"Evaluando entrada..."
+                )
+                sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
+                try:
+                    sig = get_onchain_signal(par)
+                    if sig['block']:
+                        print(f"  BLOQUEADO por on-chain")
+                        continue
+                except:
+                    pass
+                datos = obtener_datos_mercado(par)
+                if not datos:
+                    continue
+                monto = calcular_monto_diversificado(historial, capital_disponible)
+                if monto == 0:
+                    continue
+                monto = round(monto * 0.5, 2)  # 50% del monto — listings son mas riesgosos
+                if monto < MONTO_MIN:
+                    continue
+                print(f"  ENTRADA LISTING! ${monto} (50% monto)")
+                exito, cantidad, precio = ejecutar_compra(par, monto, datos)
+                if exito:
+                    historial.append({
+                        'par': par, 'precio_compra': precio, 'precio_maximo': precio,
+                        'cantidad': cantidad, 'monto': monto,
+                        'rsi_entrada': datos['rsi'],
+                        'confianza': 9, 'razon': 'NUEVO LISTING BINANCE',
+                        'onchain_score': sig['score'],
+                        'estado': 'abierta', 'estrategia': 'listing',
+                        'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    guardar_historial(historial)
+                    posiciones_abiertas += 1
+                    pares_en_uso.add(par)
+                    capital_disponible -= monto
+        except Exception as e:
+            print(f"  Error listing detector: {e}")
+
+    # PUMPS
     if modo != 'nocturno':
         print(f"\nDetectando pumps...")
         pumps = detectar_pumps(mejores_pares)
         print(f"{len(pumps)} pumps\n")
-
         for p in pumps:
             if posiciones_abiertas >= MAX_POSICIONES:
                 break
@@ -781,10 +820,9 @@ def main():
                     f"💰 ${monto} | OnChain: {sig['emoji']} {sig['score']:+.3f}"
                 )
 
-    # ── SCALPING ──────────────────────────────────────────────
+    # SCALPING
     candidatos = filtrar_candidatos(mejores_pares, modo)
     print(f"\n{len(candidatos)} candidatos scalping\n")
-
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
@@ -856,12 +894,22 @@ def main():
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')} | Modo: {modo}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance DEFINITIVO</b>\n⏰ Modo horario adaptativo\n🏆 Ranking de pares\n🔄 Auto-reinversión\n📡 Sentiment On-Chain activado\n🌐 Monitor amplio activado\n📊 Análisis completo activado")
+    enviar_telegram(
+        "🤖 <b>Bot Binance DEFINITIVO</b>\n"
+        "⏰ Modo horario adaptativo\n"
+        "🏆 Ranking de pares\n"
+        "🔄 Auto-reinversion\n"
+        "📡 Sentiment On-Chain activado\n"
+        "🌐 Monitor amplio activado\n"
+        "🆕 Detector de nuevos listings activado\n"
+        "📊 Analisis completo activado"
+    )
     while True:
         try:
             main()
         except Exception as e:
             print(f"Error: {e}")
-            enviar_telegram(f"⚠️ Error: {e}")
+            enviar_telegram(f"Error: {e}")
         time.sleep(120)
+
 
