@@ -19,6 +19,7 @@ TELEGRAM_CHAT_ID = "1576867878"
 
 MONTO_POR_ORDEN = 10.0
 TAKE_PROFIT = 0.012
+TAKE_PROFIT_PUMP = 0.025
 STOP_LOSS = 0.008
 MAX_POSICIONES = 3
 HISTORIAL_FILE = "historial_binance.json"
@@ -148,6 +149,33 @@ def filtrar_candidatos(pares_tickers):
     candidatos.sort(key=lambda x: x['cambio_24h'])
     return candidatos[:15]
 
+def detectar_pumps(pares_tickers):
+    pumps = []
+    for t in pares_tickers:
+        par = t['symbol']
+        volumen = float(t['quoteVolume'])
+        try:
+            klines = client_binance.get_klines(symbol=par, interval='1m', limit=10)
+            precios = [float(k[4]) for k in klines]
+            volumenes = [float(k[5]) for k in klines]
+            cambio_5m = ((precios[-1] - precios[-5]) / precios[-5]) * 100
+            volumen_promedio = np.mean(volumenes[:-3])
+            volumen_actual = np.mean(volumenes[-3:])
+            ratio_volumen = volumen_actual / volumen_promedio if volumen_promedio > 0 else 1
+            if (1.0 <= cambio_5m <= 8.0 and ratio_volumen >= 3.0 and volumen > 1000000):
+                pumps.append({
+                    'par': par,
+                    'cambio_5m': round(cambio_5m, 3),
+                    'cambio_24h': float(t['priceChangePercent']),
+                    'ratio_volumen': round(ratio_volumen, 2),
+                    'volumen': volumen
+                })
+        except:
+            continue
+        time.sleep(0.1)
+    pumps.sort(key=lambda x: x['ratio_volumen'], reverse=True)
+    return pumps[:5]
+
 def analizar_con_groq(datos, cambio_24h):
     try:
         rsi = datos['rsi']
@@ -219,6 +247,8 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         print(f"   VENTA OK! ID: {orden['orderId']}")
         if tipo == 'ganancia':
             enviar_telegram(f"✅ <b>TAKE PROFIT</b> {par}\n📈 Ganancia: +{pct}%\n💰 Precio: ${precio_actual}")
+        elif tipo == 'pump':
+            enviar_telegram(f"🚀 <b>PUMP PROFIT</b> {par}\n📈 Ganancia: +{pct}%\n💰 Precio: ${precio_actual}")
         else:
             enviar_telegram(f"🔴 <b>STOP LOSS</b> {par}\n📉 Pérdida: {pct}%\n💰 Precio: ${precio_actual}")
         return True
@@ -242,10 +272,13 @@ def revisar_posiciones():
         precio_compra = float(pos['precio_compra'])
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
-        print(f"  {pos['par']} | Compra: {precio_compra} | Actual: {precio_actual} | {pct:+.3f}%")
-        if cambio >= TAKE_PROFIT:
+        estrategia = pos.get('estrategia', 'scalp')
+        tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else TAKE_PROFIT
+        print(f"  {pos['par']} [{estrategia}] | Compra: {precio_compra} | Actual: {precio_actual} | {pct:+.3f}% | TP: {tp*100}%")
+        if cambio >= tp:
             print(f"  TAKE PROFIT +{pct}%!")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'ganancia'):
+            tipo_venta = 'pump' if estrategia == 'pump' else 'ganancia'
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, tipo_venta):
                 historial[i]['estado'] = 'cerrada_ganancia'
                 historial[i]['precio_venta'] = precio_actual
                 historial[i]['ganancia_pct'] = pct
@@ -277,9 +310,9 @@ def mostrar_resumen():
 
 def main():
     print("="*60)
-    print("  BOT SCALPING PRO - RSI + MACD + Bollinger + Telegram")
+    print("  BOT SCALPING PRO + PUMP DETECTOR - Binance + Groq")
     print("="*60)
-    print(f"  TP: {TAKE_PROFIT*100}% | SL: {STOP_LOSS*100}% | Max: {MAX_POSICIONES} posiciones")
+    print(f"  TP Scalp: {TAKE_PROFIT*100}% | TP Pump: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS*100}%")
     mostrar_resumen()
     print("="*60)
 
@@ -297,34 +330,61 @@ def main():
     if not mejores_pares:
         return
 
-    candidatos = filtrar_candidatos(mejores_pares)
-    print(f"{len(candidatos)} candidatos encontrados\n")
+    # DETECTOR DE PUMPS - primera prioridad
+    print(f"\nDetectando pumps...")
+    pumps = detectar_pumps(mejores_pares)
+    print(f"{len(pumps)} pumps detectados\n")
 
-    if not candidatos:
-        print("Sin caidas interesantes ahora.")
-        return
+    for p in pumps:
+        if posiciones_abiertas >= MAX_POSICIONES:
+            break
+        ya_tiene = any(pos['par'] == p['par'] and pos['estado'] == 'abierta' for pos in historial)
+        if ya_tiene:
+            continue
+        par = p['par']
+        print(f"PUMP! {par} | +{p['cambio_5m']}% en 5min | Volumen {p['ratio_volumen']}x")
+        datos = obtener_datos_mercado(par)
+        if not datos or datos['rsi'] > 72:
+            print(f"  RSI muy alto ({datos['rsi'] if datos else '?'}), saltando")
+            continue
+        print(f"  RSI: {datos['rsi']} OK - ENTRANDO!")
+        exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN, datos)
+        if exito:
+            historial.append({
+                'par': par,
+                'precio_compra': precio,
+                'cantidad': cantidad,
+                'monto': MONTO_POR_ORDEN,
+                'rsi_entrada': datos['rsi'],
+                'confianza': 9,
+                'razon': f"PUMP +{p['cambio_5m']}% en 5min, volumen {p['ratio_volumen']}x",
+                'estado': 'abierta',
+                'estrategia': 'pump',
+                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            guardar_historial(historial)
+            posiciones_abiertas += 1
+            enviar_telegram(f"🚀 <b>PUMP DETECTADO</b> {par}\n📈 +{p['cambio_5m']}% en 5min\n📊 Volumen: {p['ratio_volumen']}x el promedio\n💰 Comprando ${MONTO_POR_ORDEN}")
+
+    # SCALPING NORMAL - segunda prioridad
+    candidatos = filtrar_candidatos(mejores_pares)
+    print(f"{len(candidatos)} candidatos scalping encontrados\n")
 
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
-
         ya_tiene = any(p['par'] == c['par'] and p['estado'] == 'abierta' for p in historial)
         if ya_tiene:
             continue
-
         par = c['par']
         print(f"Analizando {par} | Cambio 24h: {c['cambio_24h']}%")
-
         datos = obtener_datos_mercado(par)
         if not datos:
             continue
-
         print(f"  RSI: {datos['rsi']} | MACD: {'alcista' if datos['macd'] > datos['macd_signal'] else 'bajista'} | BB: {'cerca piso' if datos['precio_actual'] <= datos['bb_inf'] * 1.005 else 'normal'}")
-
         analisis = analizar_con_groq(datos, c['cambio_24h'])
         if not analisis:
             continue
-
         if analisis.get('comprar') and analisis.get('confianza', 0) >= 7:
             print(f"  ENTRADA! Confianza: {analisis['confianza']}/10 | {analisis.get('razon','')}")
             exito, cantidad, precio = ejecutar_compra(par, MONTO_POR_ORDEN, datos)
@@ -338,20 +398,20 @@ def main():
                     'confianza': analisis.get('confianza'),
                     'razon': analisis.get('razon'),
                     'estado': 'abierta',
+                    'estrategia': 'scalp',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
                 guardar_historial(historial)
                 posiciones_abiertas += 1
         else:
             print(f"  Descartado (confianza: {analisis.get('confianza','?')}/10)")
-
         time.sleep(0.5)
 
     print(f"\n{'='*60}")
     print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')}")
 
 if __name__ == "__main__":
-    enviar_telegram("🤖 <b>Bot Binance iniciado</b>\nEscaneando mercado cada 2 minutos...")
+    enviar_telegram("🤖 <b>Bot Binance PRO iniciado</b>\n🚀 Pump Detector + Scalping RSI/MACD/Bollinger\nEscaneando cada 2 minutos...")
     while True:
         try:
             main()
