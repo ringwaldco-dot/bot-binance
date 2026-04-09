@@ -863,8 +863,18 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
 # ============================================================
 
 def verificar_capital_minimo():
-    """Pausa el bot si el capital cae por debajo del mínimo."""
+    """Pausa el bot solo si el capital libre es bajo Y no hay posiciones abiertas."""
     capital = obtener_capital_disponible()
+    historial = cargar_historial()
+    abiertas = [p for p in historial if p.get('estado') == 'abierta']
+
+    # Si hay posiciones abiertas, el capital está invertido — no es una pérdida
+    if abiertas:
+        if capital <= CAPITAL_ALERTA:
+            print(f"  [CAPITAL] ${capital:.2f} libre — capital invertido en {len(abiertas)} posiciones, OK")
+        return True
+
+    # Sin posiciones abiertas y capital bajo → sí es problema real
     if capital <= CAPITAL_MINIMO:
         msg = (
             f"🚨 <b>ALERTA CAPITAL CRÍTICO</b>\n"
@@ -872,7 +882,7 @@ def verificar_capital_minimo():
             f"⛔ Bot pausado — mínimo es ${CAPITAL_MINIMO}\n"
             f"💡 Depositá fondos para reanudar"
         )
-        print(f"  [CAPITAL] ${capital:.2f} — por debajo del mínimo ${CAPITAL_MINIMO} — PAUSANDO")
+        print(f"  [CAPITAL] ${capital:.2f} sin posiciones abiertas — PAUSANDO")
         enviar_telegram(msg)
         return False
     if capital <= CAPITAL_ALERTA:
