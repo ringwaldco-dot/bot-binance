@@ -398,14 +398,28 @@ def obtener_mejores_pares():
     except:
         return []
 
+def btc_en_caida():
+    """Retorna True si BTC cayó más de 2% en la última hora — pausa entradas."""
+    try:
+        klines = client_binance.get_klines(symbol='BTCUSDT', interval='1h', limit=2)
+        p_anterior = float(klines[0][4])
+        p_actual = float(klines[1][4])
+        cambio = ((p_actual - p_anterior) / p_anterior) * 100
+        if cambio <= -2.0:
+            print(f"  [BTC FILTER] BTC cayó {cambio:.2f}% en 1h — pausando entradas")
+            return True
+        return False
+    except:
+        return False
+
 def filtrar_candidatos(pares_tickers):
-    """Sin distinción horaria — rango -10% a +3% siempre activo."""
+    """Sin distinción horaria. Excluye pares con caída mayor a -5% en 24h."""
     candidatos = []
     for t in pares_tickers:
         cambio = float(t['priceChangePercent'])
         vol = float(t['quoteVolume'])
         par = t['symbol']
-        if -10 <= cambio <= 3.0 and vol > 2000000 and not esta_en_blacklist(par):
+        if -5 <= cambio <= 3.0 and vol > 2000000 and not esta_en_blacklist(par):
             candidatos.append({'par': par, 'cambio_24h': cambio, 'volumen': vol, 'score': obtener_score_par(par)})
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:20]
@@ -912,9 +926,15 @@ def main():
         except Exception as e:
             print(f"  Error listings: {e}")
 
-    # SCALPING — 24/7, confianza mínima 6 siempre
+    # SCALPING — 24/7, confianza mínima 7
     candidatos = filtrar_candidatos(mejores_pares)
     print(f"\n{len(candidatos)} candidatos scalping\n")
+
+    # Filtro BTC — si cae fuerte, pausar entradas nuevas
+    if btc_en_caida():
+        print("  [BTC FILTER] Entradas pausadas este ciclo")
+        return
+
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
@@ -944,9 +964,9 @@ def main():
         analisis = analizar_sentimiento_groq(par, d5, d1h, c['cambio_24h'], 'activo', c['score'], sig['score'])
         if not analisis:
             continue
-        confianza_minima = 6
+        confianza_minima = 7
         if sig['action'] == 'SLIGHT_SHORT':
-            confianza_minima = 7
+            confianza_minima = 8
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             if capital_disponible < MONTO_MIN:
                 liberado = rebalancear_si_necesario(c, tipo='scalp', confianza=analisis.get('confianza', 0))
