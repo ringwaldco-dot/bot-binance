@@ -36,8 +36,10 @@ STOP_LOSS = 0.008
 STOP_LOSS_PUMP = 0.006
 TRAILING_STOP = 0.005
 CRASH_THRESHOLD = -8.0
-CUT_LOSS_UMBRAL = -0.003        # -0.3% — umbral para activar cut loss
-CUT_LOSS_MINUTOS = 5            # minutos en pérdida antes de cortar
+CUT_LOSS_UMBRAL = -0.003
+CUT_LOSS_MINUTOS = 5
+CICLO_PUMP_SEGUNDOS = 15        # pump thread — cada 15s
+CICLO_MAIN_SEGUNDOS = 90        # loop principal — cada 90s
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
@@ -52,16 +54,11 @@ monitor_mercado = MonitorMercado()
 listing_detector = ListingDetector()
 
 # ============================================================
-# MODO HORARIO
+# MODO — 24/7 GLOBAL, SIN RESTRICCIONES HORARIAS
 # ============================================================
 def obtener_modo_horario():
-    hora = datetime.now().hour
-    if 8 <= hora < 16:
-        return 'activo', 0.012, 0.008
-    elif 16 <= hora < 22:
-        return 'normal', 0.015, 0.010
-    else:
-        return 'nocturno', 0.020, 0.006
+    """Opera igual a las 3am que a las 3pm. Mercado crypto es global 24/7."""
+    return 'activo', 0.012, 0.008
 
 # ============================================================
 # RANKING
@@ -146,18 +143,18 @@ def agregar_a_blacklist(par, razon):
     veces = blacklist.get(par, {}).get('veces', 0) + 1
     blacklist[par] = {'razon': razon, 'expira': expira, 'veces': veces}
     guardar_blacklist(blacklist)
-    print(f"  {par} blacklist 24hs ({veces} veces)")
-    enviar_telegram(f"🚫 <b>BLACKLIST</b> {par}\nRazón: {razon}\nBaneado 24hs")
+    print(f"  {par} blacklist 24hs ({veces}x)")
+    enviar_telegram(f"🚫 <b>BLACKLIST</b> {par}\nRazón: {razon}")
 
 def actualizar_blacklist_post_venta(par, ganancia_pct):
     actualizar_ranking(par, ganancia_pct)
     if ganancia_pct < 0:
         blacklist = cargar_blacklist()
-        veces_perdida = blacklist.get(par, {}).get('veces', 0) + 1
-        if veces_perdida >= 2:
-            agregar_a_blacklist(par, f"Perdio {veces_perdida} veces seguidas")
+        veces = blacklist.get(par, {}).get('veces', 0) + 1
+        if veces >= 2:
+            agregar_a_blacklist(par, f"Perdio {veces} veces seguidas")
         else:
-            blacklist[par] = {'veces': veces_perdida, 'ultima_perdida': datetime.now().isoformat()}
+            blacklist[par] = {'veces': veces, 'ultima_perdida': datetime.now().isoformat()}
             guardar_blacklist(blacklist)
     else:
         blacklist = cargar_blacklist()
@@ -176,19 +173,15 @@ def calcular_monto_dinamico(historial):
     ganancias = sum(1 for p in ultimas if p.get('estado') == 'cerrada_ganancia')
     ratio = ganancias / len(ultimas)
     if ratio >= 0.8:
-        monto = MONTO_BASE * 1.3
+        return round(min(MONTO_MAX, MONTO_BASE * 1.3), 2)
     elif ratio <= 0.3:
-        monto = MONTO_BASE * 0.7
-    else:
-        monto = MONTO_BASE
-    return round(max(MONTO_MIN, min(MONTO_MAX, monto)), 2)
+        return round(max(MONTO_MIN, MONTO_BASE * 0.7), 2)
+    return MONTO_BASE
 
 def calcular_monto_diversificado(historial, capital_disponible):
     monto = calcular_monto_dinamico(historial)
     monto = min(monto, capital_disponible * 0.9)
-    if monto < MONTO_MIN:
-        return 0
-    return round(monto, 2)
+    return round(monto, 2) if monto >= MONTO_MIN else 0
 
 # ============================================================
 # REPORTE DIARIO
@@ -199,66 +192,49 @@ def enviar_reporte_diario():
         if os.path.exists(REPORTE_FILE):
             with open(REPORTE_FILE, "r") as f:
                 ultimo = json.load(f)
-        ultima_fecha = ultimo.get('fecha', '')
-        hoy = datetime.now().strftime("%Y-%m-%d")
-        if ultima_fecha == hoy or datetime.now().hour != 8:
+        hoy = datetime.utcnow().strftime("%Y-%m-%d")  # UTC para consistencia global
+        if ultimo.get('fecha') == hoy or datetime.utcnow().hour != 8:
             return
         historial = cargar_historial()
-        ayer = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        ayer = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
         ops_ayer = [p for p in historial if p.get('fecha_cierre', '').startswith(ayer)]
         ganancias = [p for p in ops_ayer if p.get('estado') == 'cerrada_ganancia']
         perdidas = [p for p in ops_ayer if p.get('estado') == 'cerrada_perdida']
         total_g = sum(p.get('ganancia_pct', 0) for p in ganancias)
         total_p = sum(p.get('ganancia_pct', 0) for p in perdidas)
-        neto = total_g + total_p
         todas_g = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
         todas_p = [p for p in historial if p.get('estado') == 'cerrada_perdida']
-        neto_total = sum(p.get('ganancia_pct', 0) for p in todas_g) + sum(p.get('ganancia_pct', 0) for p in todas_p)
-        blacklist = cargar_blacklist()
+        neto_total = sum(p.get('ganancia_pct', 0) for p in todas_g + todas_p)
         ranking = cargar_ranking()
-        top_pares = sorted(ranking.items(), key=lambda x: x[1]['score'], reverse=True)[:3]
-        top_str = " | ".join([f"{p[0]}({p[1]['score']})" for p in top_pares]) if top_pares else "Sin datos"
-        pumps_g = [p for p in todas_g if p.get('estrategia') == 'pump']
-        pumps_p = [p for p in todas_p if p.get('estrategia') == 'pump']
-        scalp_g = [p for p in todas_g if p.get('estrategia') != 'pump']
-        scalp_p = [p for p in todas_p if p.get('estrategia') != 'pump']
-        cut_losses = [p for p in todas_p if 'cut_loss' in p.get('razon_cierre', '')]
-        rebalanceos = [p for p in historial if 'rebalanceo' in p.get('razon_cierre', '')]
-        reporte = f"""📊 <b>REPORTE DIARIO</b> {ayer}
-━━━━━━━━━━━━━━━━━━━━
-📈 Operaciones: {len(ops_ayer)}
-✅ Ganancias: {len(ganancias)} (+{total_g:.2f}%)
-🔴 Pérdidas: {len(perdidas)} ({total_p:.2f}%)
-💰 Neto del día: {neto:+.2f}%
-━━━━━━━━━━━━━━━━━━━━
-🚀 Pump: {len(pumps_g)}G / {len(pumps_p)}P
-📉 Scalp: {len(scalp_g)}G / {len(scalp_p)}P
-✂️ Cut losses: {len(cut_losses)} | 🔄 Rebalanceos: {len(rebalanceos)}
-━━━━━━━━━━━━━━━━━━━━
-📦 Acumulado total: {neto_total:+.2f}%
-🚫 Blacklist: {len(blacklist)} | 🏆 Top: {top_str}
-━━━━━━━━━━━━━━━━━━━━
-🤖 Bot operando normalmente"""
-        enviar_telegram(reporte)
+        top = sorted(ranking.items(), key=lambda x: x[1]['score'], reverse=True)[:3]
+        top_str = " | ".join([f"{p[0]}({p[1]['score']})" for p in top]) or "Sin datos"
+        pumps_g = len([p for p in todas_g if p.get('estrategia') == 'pump'])
+        pumps_p = len([p for p in todas_p if p.get('estrategia') == 'pump'])
+        scalp_g = len([p for p in todas_g if p.get('estrategia') != 'pump'])
+        scalp_p = len([p for p in todas_p if p.get('estrategia') != 'pump'])
+        cut_losses = len([p for p in todas_p if 'cut_loss' in p.get('razon_cierre', '')])
+        rebalanceos = len([p for p in historial if 'rebalanceo' in p.get('razon_cierre', '')])
+        enviar_telegram(
+            f"📊 <b>REPORTE DIARIO UTC</b> {ayer}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 Ops: {len(ops_ayer)} | ✅ {len(ganancias)} (+{total_g:.2f}%) | 🔴 {len(perdidas)} ({total_p:.2f}%)\n"
+            f"💰 Neto día: {total_g+total_p:+.2f}%\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🚀 Pump: {pumps_g}G/{pumps_p}P | 📉 Scalp: {scalp_g}G/{scalp_p}P\n"
+            f"✂️ Cut losses: {cut_losses} | 🔄 Rebalanceos: {rebalanceos}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 Acumulado: {neto_total:+.2f}% | 🚫 BL: {len(cargar_blacklist())}\n"
+            f"🏆 Top: {top_str}"
+        )
         try:
             sig_btc = get_onchain_signal("BTCUSDT")
             sig_eth = get_onchain_signal("ETHUSDT")
             fg = sig_btc['components']['fear_greed']
-            if fg['value'] <= 20:
-                desc = "⚠️ Extremo miedo — posibles rebotes"
-            elif fg['value'] <= 40:
-                desc = "😟 Miedo — buscar rebotes"
-            elif fg['value'] <= 60:
-                desc = "😐 Neutral"
-            elif fg['value'] <= 80:
-                desc = "😀 Codicia — cuidado con sobrecompra"
-            else:
-                desc = "🔥 Extrema codicia — riesgo de corrección"
             enviar_telegram(
-                f"📡 <b>Sentiment apertura</b>\n"
+                f"📡 <b>Sentiment apertura UTC</b>\n"
                 f"BTC {sig_btc['emoji']} {sig_btc['score']:+.3f} {sig_btc['action']}\n"
                 f"ETH {sig_eth['emoji']} {sig_eth['score']:+.3f} {sig_eth['action']}\n"
-                f"Fear &amp; Greed: {fg['value']} ({fg['label']})\n{desc}"
+                f"Fear &amp; Greed: {fg['value']} ({fg['label']})"
             )
         except Exception as e:
             print(f"  Error onchain reporte: {e}")
@@ -278,8 +254,7 @@ def obtener_precio(par):
 
 def obtener_capital_disponible():
     try:
-        account = client_binance.get_account()
-        for b in account['balances']:
+        for b in client_binance.get_account()['balances']:
             if b['asset'] == 'USDT':
                 return float(b['free'])
         return 0
@@ -290,10 +265,8 @@ def calcular_rsi(precios, periodo=14):
     if len(precios) < periodo + 1:
         return 50
     deltas = np.diff(precios)
-    ganancias = np.where(deltas > 0, deltas, 0)
-    perdidas = np.where(deltas < 0, -deltas, 0)
-    avg_g = np.mean(ganancias[-periodo:])
-    avg_p = np.mean(perdidas[-periodo:])
+    avg_g = np.mean(np.where(deltas > 0, deltas, 0)[-periodo:])
+    avg_p = np.mean(np.where(deltas < 0, -deltas, 0)[-periodo:])
     if avg_p == 0:
         return 100
     return 100 - (100 / (1 + avg_g / avg_p))
@@ -310,10 +283,9 @@ def calcular_ema(precios, periodo):
 def calcular_macd(precios):
     if len(precios) < 26:
         return 0, 0
-    precios = np.array(precios)
-    macd = calcular_ema(precios, 12) - calcular_ema(precios, 26)
-    signal = calcular_ema(np.array([macd] * 9), 9)
-    return macd, signal
+    p = np.array(precios)
+    macd = calcular_ema(p, 12) - calcular_ema(p, 26)
+    return macd, calcular_ema(np.array([macd] * 9), 9)
 
 def calcular_bollinger(precios, periodo=20):
     if len(precios) < periodo:
@@ -327,22 +299,17 @@ def obtener_datos_mercado(par, intervalo='5m', limite=50):
     try:
         klines = client_binance.get_klines(symbol=par, interval=intervalo, limit=limite)
         precios = [float(k[4]) for k in klines]
-        volumenes = [float(k[5]) for k in klines]
+        vols = [float(k[5]) for k in klines]
         rsi = calcular_rsi(precios)
         macd, signal = calcular_macd(precios)
         bb_sup, bb_med, bb_inf = calcular_bollinger(precios)
-        vol_prom = np.mean(volumenes[-10:])
+        vol_prom = np.mean(vols[-10:])
         return {
-            'par': par,
-            'precio_actual': precios[-1],
+            'par': par, 'precio_actual': precios[-1],
             'cambio_1h': round(((precios[-1] - precios[-12]) / precios[-12]) * 100, 3),
-            'rsi': round(rsi, 2),
-            'macd': macd,
-            'macd_signal': signal,
-            'bb_sup': bb_sup,
-            'bb_media': bb_med,
-            'bb_inf': bb_inf,
-            'volumen_ratio': volumenes[-1] / vol_prom if vol_prom > 0 else 1,
+            'rsi': round(rsi, 2), 'macd': macd, 'macd_signal': signal,
+            'bb_sup': bb_sup, 'bb_media': bb_med, 'bb_inf': bb_inf,
+            'volumen_ratio': vols[-1] / vol_prom if vol_prom > 0 else 1,
             'precios': precios
         }
     except:
@@ -376,23 +343,18 @@ def es_caida_libre(par, cambio_24h):
 
 def analizar_sentimiento_groq(par, d5, d1h, cambio_24h, modo, score_par, onchain_score=0.0):
     try:
-        if onchain_score >= 0.35:
-            oc = f"ALCISTA ({onchain_score:+.2f})"
-        elif onchain_score >= 0.15:
-            oc = f"LEV.ALCISTA ({onchain_score:+.2f})"
-        elif onchain_score <= -0.35:
-            oc = f"BAJISTA ({onchain_score:+.2f})"
-        elif onchain_score <= -0.15:
-            oc = f"LEV.BAJISTA ({onchain_score:+.2f})"
-        else:
-            oc = f"NEUTRO ({onchain_score:+.2f})"
+        if onchain_score >= 0.35: oc = f"ALCISTA ({onchain_score:+.2f})"
+        elif onchain_score >= 0.15: oc = f"LEV.ALCISTA ({onchain_score:+.2f})"
+        elif onchain_score <= -0.35: oc = f"BAJISTA ({onchain_score:+.2f})"
+        elif onchain_score <= -0.15: oc = f"LEV.BAJISTA ({onchain_score:+.2f})"
+        else: oc = f"NEUTRO ({onchain_score:+.2f})"
 
-        prompt = f"""Trader experto crypto scalping.
-Par:{par} Score:{score_par}/100 Modo:{modo} 24h:{cambio_24h}%
+        prompt = f"""Trader experto crypto scalping 24/7 global.
+Par:{par} Score:{score_par}/100 24h:{cambio_24h}%
 5M: RSI {d5['rsi']} MACD {'▲' if d5['macd']>d5['macd_signal'] else '▼'} BB {'PISO' if d5['precio_actual']<=d5['bb_inf']*1.005 else 'MED'}
 1H: RSI {d1h['rsi']} MACD {'▲' if d1h['macd']>d1h['macd_signal'] else '▼'} BB {'PISO' if d1h['precio_actual']<=d1h['bb_inf']*1.01 else 'MED'}
 OnChain:{oc}
-Comprá si 1+ timeframe positivo. Nocturno: exigí ambos. OnChain BAJISTA: señales fuertes.
+Comprá si 1+ timeframe positivo. OnChain BAJISTA: exigí señales fuertes.
 JSON: {{"comprar":true,"confianza":8,"razon":"1 linea"}}"""
 
         r = client_groq.chat.completions.create(
@@ -421,14 +383,14 @@ def obtener_mejores_pares():
     except:
         return []
 
-def filtrar_candidatos(pares_tickers, modo):
+def filtrar_candidatos(pares_tickers):
+    """Sin distinción horaria — rango -10% a +3% siempre activo."""
     candidatos = []
     for t in pares_tickers:
         cambio = float(t['priceChangePercent'])
         vol = float(t['quoteVolume'])
         par = t['symbol']
-        umbral_max = -0.5 if modo == 'nocturno' else 3.0
-        if -10 <= cambio <= umbral_max and vol > 2000000 and not esta_en_blacklist(par):
+        if -10 <= cambio <= 3.0 and vol > 2000000 and not esta_en_blacklist(par):
             candidatos.append({'par': par, 'cambio_24h': cambio, 'volumen': vol, 'score': obtener_score_par(par)})
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:20]
@@ -451,8 +413,7 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
         dec = len(step.rstrip('0').split('.')[-1]) if '.' in step else 0
-        cantidad = round(cantidad, dec)
-        orden = client_binance.order_market_sell(symbol=par, quantity=cantidad)
+        orden = client_binance.order_market_sell(symbol=par, quantity=round(cantidad, dec))
         emojis = {'ganancia': '✅', 'pump': '🚀', 'trailing': '📉', 'perdida': '🔴'}
         nombres = {'ganancia': 'TAKE PROFIT', 'pump': 'PUMP PROFIT', 'trailing': 'TRAILING STOP', 'perdida': 'STOP LOSS'}
         enviar_telegram(f"{emojis.get(tipo,'✅')} <b>{nombres.get(tipo,'VENTA')}</b> {par}\n{'Ganancia' if pct>0 else 'Pérdida'}: {pct:+.3f}%\n💰 ${precio_actual}")
@@ -464,63 +425,51 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
 
 # ============================================================
 # CUT LOSS AGRESIVO
-# Si una posición lleva >5 min con pérdida >= -0.3%, vender.
 # ============================================================
 def revisar_cut_loss():
-    """Corre cada ciclo. Vende posiciones que llevan demasiado tiempo en pérdida."""
     with _lock:
         historial = cargar_historial()
         cambios = False
-
         for i, pos in enumerate(historial):
             if pos.get('estado') != 'abierta':
                 continue
-
             precio_actual = obtener_precio(pos['par'])
             if not precio_actual:
                 continue
-
-            precio_compra = float(pos['precio_compra'])
-            cambio = (precio_actual - precio_compra) / precio_compra
+            cambio = (precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])
             pct = round(cambio * 100, 3)
 
-            # En ganancia o neutral — resetear contador
             if cambio >= 0:
-                if historial[i].get('en_perdida_desde') is not None:
+                if historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = None
                     cambios = True
                 continue
 
             if cambio <= CUT_LOSS_UMBRAL:
                 ahora = datetime.now()
-                if historial[i].get('en_perdida_desde') is None:
-                    # Primera vez bajo el umbral — iniciar contador
+                if not historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = ahora.isoformat()
                     cambios = True
-                    print(f"  [CUT LOSS] {pos['par']} {pct}% — iniciando contador")
+                    print(f"  [CUT LOSS] {pos['par']} {pct}% — contador iniciado")
                 else:
-                    desde = datetime.fromisoformat(historial[i]['en_perdida_desde'])
-                    minutos = (ahora - desde).total_seconds() / 60
-                    print(f"  [CUT LOSS] {pos['par']} {pct}% | {minutos:.1f}min en pérdida")
-
-                    if minutos >= CUT_LOSS_MINUTOS:
-                        print(f"  [CUT LOSS] CORTANDO {pos['par']} — {minutos:.1f}min en {pct}%")
-                        exito = ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida')
-                        if exito:
-                            historial[i]['estado'] = 'cerrada_perdida'
-                            historial[i]['precio_venta'] = precio_actual
-                            historial[i]['ganancia_pct'] = pct
-                            historial[i]['fecha_cierre'] = ahora.strftime("%Y-%m-%d %H:%M:%S")
-                            historial[i]['razon_cierre'] = f'cut_loss_{minutos:.0f}min'
+                    mins = (ahora - datetime.fromisoformat(historial[i]['en_perdida_desde'])).total_seconds() / 60
+                    print(f"  [CUT LOSS] {pos['par']} {pct}% | {mins:.1f}min")
+                    if mins >= CUT_LOSS_MINUTOS:
+                        print(f"  [CUT LOSS] CORTANDO {pos['par']} — {mins:.0f}min en {pct}%")
+                        if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
+                            historial[i].update({
+                                'estado': 'cerrada_perdida', 'precio_venta': precio_actual,
+                                'ganancia_pct': pct, 'razon_cierre': f'cut_loss_{mins:.0f}min',
+                                'fecha_cierre': ahora.strftime("%Y-%m-%d %H:%M:%S")
+                            })
                             cambios = True
                             enviar_telegram(
                                 f"✂️ <b>CUT LOSS</b> {pos['par']}\n"
-                                f"📉 {pct:+.3f}% por {minutos:.0f} minutos\n"
-                                f"💡 Capital liberado para mejor oportunidad"
+                                f"📉 {pct:+.3f}% por {mins:.0f} minutos\n"
+                                f"💡 Capital liberado"
                             )
             else:
-                # Pérdida menor al umbral — resetear contador
-                if historial[i].get('en_perdida_desde') is not None:
+                if historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = None
                     cambios = True
 
@@ -528,18 +477,14 @@ def revisar_cut_loss():
             guardar_historial(historial)
 
 # ============================================================
-# REBALANCEO DINÁMICO
-# Vende la peor posición para entrar en una mejor oportunidad.
+# REBALANCEO DINAMICO
 # ============================================================
 def elegir_posicion_sacrificable():
-    """Devuelve la posición con menor ganancia actual."""
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta']
     if not posiciones:
         return None
-
-    peor = None
-    peor_cambio = float('inf')
+    peor, peor_cambio = None, float('inf')
     for pos in posiciones:
         precio_actual = obtener_precio(pos['par'])
         if not precio_actual:
@@ -547,33 +492,17 @@ def elegir_posicion_sacrificable():
         cambio = (precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])
         if cambio < peor_cambio:
             peor_cambio = cambio
-            peor = {
-                'par': pos['par'],
-                'cantidad': pos.get('cantidad', 0),
-                'precio_actual': precio_actual,
-                'cambio_pct': round(cambio * 100, 3),
-                'monto': pos.get('monto', 0)
-            }
+            peor = {'par': pos['par'], 'cantidad': pos.get('cantidad', 0),
+                    'precio_actual': precio_actual, 'cambio_pct': round(cambio * 100, 3)}
     return peor
 
 def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
-    """
-    Solo actúa si no hay capital suficiente.
-    tipo='pump': necesita ratio_vol >= 2.0
-    tipo='scalp': necesita confianza >= 7
-    Retorna monto liberado o 0.
-    """
-    capital = obtener_capital_disponible()
-    if capital >= MONTO_MIN:
-        return 0  # Hay capital, no hace falta
-
-    # Verificar calidad de la oportunidad
-    if tipo == 'pump':
-        if oportunidad.get('ratio_vol', 0) < 2.0:
-            return 0
-    elif tipo == 'scalp':
-        if confianza < 7:
-            return 0
+    if obtener_capital_disponible() >= MONTO_MIN:
+        return 0
+    if tipo == 'pump' and oportunidad.get('ratio_vol', 0) < 2.0:
+        return 0
+    if tipo == 'scalp' and confianza < 7:
+        return 0
 
     sacrificable = elegir_posicion_sacrificable()
     if not sacrificable:
@@ -583,36 +512,33 @@ def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
     pct = sacrificable['cambio_pct']
     precio_actual = sacrificable['precio_actual']
     cantidad = sacrificable['cantidad']
-    monto_liberado = round(cantidad * precio_actual, 2)
-    opp_nombre = oportunidad.get('par', oportunidad.get('par_binance', '?'))
+    opp = oportunidad.get('par', oportunidad.get('par_binance', '?'))
 
-    print(f"  [REBALANCEO] Sacrificando {par} ({pct:+.3f}%) → {opp_nombre}")
-
+    print(f"  [REBALANCEO] {par} ({pct:+.3f}%) → {opp}")
     with _lock:
-        exito = ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida' if pct < 0 else 'ganancia')
-        if exito:
+        if ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida' if pct < 0 else 'ganancia'):
             historial = cargar_historial()
             for i, pos in enumerate(historial):
                 if pos.get('par') == par and pos.get('estado') == 'abierta':
-                    historial[i]['estado'] = 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida'
-                    historial[i]['precio_venta'] = precio_actual
-                    historial[i]['ganancia_pct'] = pct
-                    historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    historial[i]['razon_cierre'] = f'rebalanceo_por_{opp_nombre}'
+                    historial[i].update({
+                        'estado': 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida',
+                        'precio_venta': precio_actual, 'ganancia_pct': pct,
+                        'razon_cierre': f'rebalanceo_por_{opp}',
+                        'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
                     break
             guardar_historial(historial)
             enviar_telegram(
                 f"🔄 <b>REBALANCEO</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"❌ Vendido: {par} {pct:+.3f}%\n"
-                f"✅ Nueva entrada: <b>{opp_nombre}</b>\n"
-                f"💡 {'Pump vol ' + str(oportunidad.get('ratio_vol','?')) + 'x' if tipo=='pump' else 'Scalp confianza ' + str(confianza) + '/10'}"
+                f"✅ Entrando en: <b>{opp}</b>\n"
+                f"💡 {'Pump vol ' + str(oportunidad.get('ratio_vol','?')) + 'x' if tipo=='pump' else 'Scalp ' + str(confianza) + '/10'}"
             )
-            return monto_liberado
+            return round(cantidad * precio_actual, 2)
     return 0
 
 # ============================================================
-# THREAD DEDICADO A PUMPS
+# THREAD DEDICADO A PUMPS — 24/7, ciclo 15s
 # ============================================================
 def detectar_pumps_rapido():
     try:
@@ -637,12 +563,9 @@ def detectar_pumps_rapido():
                 rsi = calcular_rsi(precios)
                 if c3m >= 0.4 and c5m >= 0.5 and ratio_vol >= 1.8 and rsi < 75:
                     pumps.append({
-                        'par': par,
-                        'cambio_3m': round(c3m, 3),
-                        'cambio_5m': round(c5m, 3),
-                        'ratio_vol': round(ratio_vol, 2),
-                        'rsi': round(rsi, 1),
-                        'score': obtener_score_par(par)
+                        'par': par, 'cambio_3m': round(c3m, 3),
+                        'cambio_5m': round(c5m, 3), 'ratio_vol': round(ratio_vol, 2),
+                        'rsi': round(rsi, 1), 'score': obtener_score_par(par)
                     })
             except:
                 continue
@@ -657,17 +580,17 @@ def _cerrar_posicion_historial(par, precio_actual, pct, estado):
     historial = cargar_historial()
     for i, pos in enumerate(historial):
         if pos.get('par') == par and pos.get('estado') == 'abierta' and pos.get('estrategia') == 'pump':
-            historial[i]['estado'] = estado
-            historial[i]['precio_venta'] = precio_actual
-            historial[i]['ganancia_pct'] = pct
-            historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            historial[i].update({
+                'estado': estado, 'precio_venta': precio_actual,
+                'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
             break
     guardar_historial(historial)
 
 def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
     precio_maximo = precio_compra
     inicio = time.time()
-    print(f"  [WATCH] {par} ${precio_compra:.6f} | TP {TAKE_PROFIT_PUMP*100}% SL {STOP_LOSS_PUMP*100}%")
+    print(f"  [WATCH] {par} ${precio_compra:.6f} TP:{TAKE_PROFIT_PUMP*100}% SL:{STOP_LOSS_PUMP*100}%")
     while time.time() - inicio < 300:
         time.sleep(5)
         precio_actual = obtener_precio(par)
@@ -686,19 +609,18 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
                 _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
             return
         if cambio >= TAKE_PROFIT_PUMP:
-            print(f"  [WATCH] TAKE PROFIT {par} +{pct}%!")
+            print(f"  [WATCH] TP {par} +{pct}%!")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'pump')
                 _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
             return
         if cambio <= -STOP_LOSS_PUMP:
-            print(f"  [WATCH] STOP LOSS {par} {pct}%")
+            print(f"  [WATCH] SL {par} {pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida')
                 _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_perdida')
             return
 
-    # Timeout
     precio_actual = obtener_precio(par) or precio_compra
     cambio = (precio_actual - precio_compra) / precio_compra
     pct = round(cambio * 100, 3)
@@ -708,14 +630,10 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
         _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida')
 
 def ciclo_pump_agresivo():
-    print("  [PUMP THREAD] Iniciado ✓")
+    """Thread pump — 24/7, sin pausa nocturna, ciclo 15s."""
+    print("  [PUMP THREAD] Iniciado 24/7 ✓")
     while True:
         try:
-            modo, _, _ = obtener_modo_horario()
-            if modo == 'nocturno':
-                time.sleep(60)
-                continue
-
             with _lock:
                 historial = cargar_historial()
                 pumps_ab = len([p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') == 'pump'])
@@ -723,19 +641,18 @@ def ciclo_pump_agresivo():
                 capital = obtener_capital_disponible()
 
             if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
-                time.sleep(20)
+                time.sleep(CICLO_PUMP_SEGUNDOS)
                 continue
 
             pumps = detectar_pumps_rapido()
             if not pumps:
-                time.sleep(20)
+                time.sleep(CICLO_PUMP_SEGUNDOS)
                 continue
 
-            print(f"\n  [PUMP THREAD] {len(pumps)} candidatos — {datetime.now().strftime('%H:%M:%S')}")
+            print(f"\n  [PUMP] {len(pumps)} candidatos — {datetime.utcnow().strftime('%H:%M:%S')} UTC")
 
             for p in pumps:
                 par = p['par']
-
                 with _lock:
                     historial = cargar_historial()
                     pares_en_uso = {pos['par'] for pos in historial if pos.get('estado') == 'abierta'}
@@ -748,12 +665,11 @@ def ciclo_pump_agresivo():
                 if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
                     break
 
-                # REBALANCEO: si no hay capital pero el pump es bueno, sacrificar la peor posición
                 if capital < MONTO_MIN:
                     liberado = rebalancear_si_necesario(p, tipo='pump')
                     if liberado:
                         capital = obtener_capital_disponible()
-                        time.sleep(1)  # esperar que Binance actualice el balance
+                        time.sleep(1)
                     else:
                         continue
 
@@ -761,8 +677,7 @@ def ciclo_pump_agresivo():
                 if monto < MONTO_MIN:
                     continue
 
-                print(f"  [PUMP THREAD] ENTRANDO {par} | +{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']} | ${monto}")
-
+                print(f"  [PUMP] ENTRANDO {par} +{p['cambio_5m']}% Vol:{p['ratio_vol']}x RSI:{p['rsi']} ${monto}")
                 with _lock:
                     exito, cantidad, precio = ejecutar_compra(par, monto, {'rsi': p['rsi']})
                     if exito:
@@ -781,12 +696,11 @@ def ciclo_pump_agresivo():
                             f"+{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']}\n"
                             f"💰 ${monto} | TP:{TAKE_PROFIT_PUMP*100}% SL:{STOP_LOSS_PUMP*100}%"
                         )
-                        t = threading.Thread(target=vigilar_posicion_pump, args=(par, precio, cantidad, monto), daemon=True)
-                        t.start()
+                        threading.Thread(target=vigilar_posicion_pump, args=(par, precio, cantidad, monto), daemon=True).start()
 
         except Exception as e:
             print(f"  [PUMP THREAD] Error: {e}")
-        time.sleep(20)
+        time.sleep(CICLO_PUMP_SEGUNDOS)
 
 # ============================================================
 # REVISAR POSICIONES SCALP
@@ -812,9 +726,8 @@ def revisar_posiciones(tp_actual, sl_actual):
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        trailing = cambio >= tp_actual and caida >= TRAILING_STOP
-        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | Max:{precio_maximo:.6f}")
-        if trailing:
+        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}%")
+        if cambio >= tp_actual and caida >= TRAILING_STOP:
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
                 historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
@@ -830,7 +743,7 @@ def revisar_posiciones(tp_actual, sl_actual):
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
         else:
-            print(f"  Manteniendo... ({caida*100:.2f}% desde max)")
+            print(f"  Manteniendo ({caida*100:.2f}% desde max)")
     guardar_historial(historial)
     return cerradas
 
@@ -841,9 +754,9 @@ def mostrar_resumen():
     g = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
     p = [p for p in historial if p.get('estado') == 'cerrada_perdida']
     ab = [p for p in historial if p.get('estado') == 'abierta']
-    bl = cargar_blacklist()
     pumps_ab = len([x for x in ab if x.get('estrategia') == 'pump'])
-    print(f"  G:{len(g)} (+{sum(x.get('ganancia_pct',0) for x in g):.2f}%) P:{len(p)} ({sum(x.get('ganancia_pct',0) for x in p):.2f}%) | Abiertas:{len(ab)}(pump:{pumps_ab}) | BL:{len(bl)}")
+    neto = sum(x.get('ganancia_pct', 0) for x in g+p)
+    print(f"  G:{len(g)} P:{len(p)} | Abiertas:{len(ab)}(pump:{pumps_ab}) | Neto:{neto:+.2f}% | BL:{len(cargar_blacklist())}")
 
 def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_uso, posiciones_abiertas, tp_actual, sl_actual):
     for señal in señales:
@@ -865,24 +778,20 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
         d1h = obtener_datos_mercado(par, '1h', 50)
         if not d5 or not d1h:
             continue
-        analisis = analizar_sentimiento_groq(par, d5, d1h, señal['cambio_24h'], 'monitor', obtener_score_par(par), sig['score'])
+        analisis = analizar_sentimiento_groq(par, d5, d1h, señal['cambio_24h'], 'activo', obtener_score_par(par), sig['score'])
         if not analisis or not analisis.get('comprar') or analisis.get('confianza', 0) < 8:
             continue
-        monto = calcular_monto_diversificado(historial, capital_disponible)
-        if monto == 0:
-            continue
-        monto = round(monto * 0.7, 2)
+        monto = round(calcular_monto_diversificado(historial, capital_disponible) * 0.7, 2)
         if monto < MONTO_MIN:
             continue
         exito, cantidad, precio = ejecutar_compra(par, monto, d5)
         if exito:
             historial.append({
                 'par': par, 'precio_compra': precio, 'precio_maximo': precio,
-                'cantidad': cantidad, 'monto': monto,
-                'rsi_entrada': d5['rsi'], 'confianza': analisis.get('confianza'),
-                'razon': analisis.get('razon'), 'score_entrada': obtener_score_par(par),
-                'onchain_score': sig['score'], 'fuentes_monitor': señal['n_fuentes'],
-                'en_perdida_desde': None,
+                'cantidad': cantidad, 'monto': monto, 'rsi_entrada': d5['rsi'],
+                'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
+                'score_entrada': obtener_score_par(par), 'onchain_score': sig['score'],
+                'fuentes_monitor': señal['n_fuentes'], 'en_perdida_desde': None,
                 'estado': 'abierta', 'estrategia': 'monitor',
                 'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
@@ -897,11 +806,10 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
 # ============================================================
 def main():
     global MONITOR_CICLO
-    modo, tp_actual, sl_actual = obtener_modo_horario()
-    hora = datetime.now().hour
+    _, tp_actual, sl_actual = obtener_modo_horario()
 
     print("="*60)
-    print(f"  BOT v4 - Modo: {modo.upper()} ({hora}hs)")
+    print(f"  BOT v5 24/7 — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
     print("="*60)
     mostrar_resumen()
     print("="*60)
@@ -911,7 +819,6 @@ def main():
     with _lock:
         revisar_posiciones(tp_actual, sl_actual)
 
-    # CUT LOSS — revisar posiciones en pérdida prolongada
     revisar_cut_loss()
 
     historial = cargar_historial()
@@ -922,7 +829,7 @@ def main():
         return
 
     capital_disponible = obtener_capital_disponible()
-    print(f"\nCapital: ${capital_disponible:.2f} | Modo: {modo}")
+    print(f"\nCapital: ${capital_disponible:.2f} USDT")
 
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
@@ -930,13 +837,13 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # MONITOR AMPLIO cada 5 ciclos
+    # MONITOR AMPLIO cada 5 ciclos (~7.5 minutos)
     MONITOR_CICLO += 1
     if MONITOR_CICLO >= 5:
         MONITOR_CICLO = 0
         try:
             señales = monitor_mercado.escanear()
-            if señales and posiciones_abiertas < MAX_POSICIONES:
+            if señales:
                 posiciones_abiertas, capital_disponible = procesar_señales_monitor(
                     señales, historial, capital_disponible,
                     pares_en_uso, posiciones_abiertas, tp_actual, sl_actual
@@ -953,7 +860,7 @@ def main():
                 par = listing['par']
                 if par in pares_en_uso or esta_en_blacklist(par):
                     continue
-                sig = {"score": 0.0, "action": "NEUTRAL", "block": False}
+                sig = {"score": 0.0, "block": False}
                 try:
                     sig = get_onchain_signal(par)
                     if sig['block']:
@@ -963,8 +870,7 @@ def main():
                 datos = obtener_datos_mercado(par)
                 if not datos:
                     continue
-                monto = calcular_monto_diversificado(historial, capital_disponible)
-                monto = round(monto * 0.5, 2)
+                monto = round(calcular_monto_diversificado(historial, capital_disponible) * 0.5, 2)
                 if monto < MONTO_MIN:
                     continue
                 exito, cantidad, precio = ejecutar_compra(par, monto, datos)
@@ -973,8 +879,7 @@ def main():
                         'par': par, 'precio_compra': precio, 'precio_maximo': precio,
                         'cantidad': cantidad, 'monto': monto, 'rsi_entrada': datos['rsi'],
                         'confianza': 9, 'razon': 'NUEVO LISTING', 'onchain_score': sig['score'],
-                        'en_perdida_desde': None,
-                        'estado': 'abierta', 'estrategia': 'listing',
+                        'en_perdida_desde': None, 'estado': 'abierta', 'estrategia': 'listing',
                         'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     })
                     guardar_historial(historial)
@@ -984,8 +889,8 @@ def main():
         except Exception as e:
             print(f"  Error listings: {e}")
 
-    # SCALPING
-    candidatos = filtrar_candidatos(mejores_pares, modo)
+    # SCALPING — 24/7, confianza mínima 6 siempre
+    candidatos = filtrar_candidatos(mejores_pares)
     print(f"\n{len(candidatos)} candidatos scalping\n")
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
@@ -993,8 +898,7 @@ def main():
         if c['par'] in pares_en_uso:
             continue
         par = c['par']
-        score = c['score']
-        print(f"Analizando {par} | 24h:{c['cambio_24h']}% | Score:{score}")
+        print(f"Analizando {par} | 24h:{c['cambio_24h']}% | Score:{c['score']}")
         if es_caida_libre(par, c['cambio_24h']):
             continue
         sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
@@ -1014,24 +918,21 @@ def main():
         if not confirmado:
             print(f"  Sin confirmacion: {razon_tf}")
             continue
-        analisis = analizar_sentimiento_groq(par, d5, d1h, c['cambio_24h'], modo, score, sig['score'])
+        analisis = analizar_sentimiento_groq(par, d5, d1h, c['cambio_24h'], 'activo', c['score'], sig['score'])
         if not analisis:
             continue
-        confianza_minima = 7 if modo == 'nocturno' else 6
+        confianza_minima = 6
         if sig['action'] == 'SLIGHT_SHORT':
-            confianza_minima = min(8, confianza_minima + 1)
-
+            confianza_minima = 7
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
-            # REBALANCEO para scalping si no hay capital y confianza >= 7
             if capital_disponible < MONTO_MIN:
                 liberado = rebalancear_si_necesario(c, tipo='scalp', confianza=analisis.get('confianza', 0))
                 if liberado:
                     capital_disponible = obtener_capital_disponible()
                     time.sleep(1)
                 else:
-                    print(f"  Sin capital y rebalanceo no aplica — saltando")
+                    print(f"  Sin capital disponible — saltando")
                     continue
-
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
                 continue
@@ -1045,9 +946,8 @@ def main():
                     'cantidad': cantidad, 'monto': monto,
                     'rsi_entrada': d5['rsi'], 'rsi_1h_entrada': d1h['rsi'],
                     'confianza': analisis.get('confianza'), 'razon': analisis.get('razon'),
-                    'score_entrada': score, 'modo': modo,
-                    'onchain_score': sig['score'], 'onchain_action': sig['action'],
-                    'en_perdida_desde': None,
+                    'score_entrada': c['score'], 'onchain_score': sig['score'],
+                    'onchain_action': sig['action'], 'en_perdida_desde': None,
                     'estado': 'abierta', 'estrategia': 'scalp',
                     'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
@@ -1060,21 +960,22 @@ def main():
         time.sleep(0.5)
 
     print(f"\n{'='*60}")
-    print(f"  Ciclo: {datetime.now().strftime('%H:%M:%S')} | Modo: {modo}")
+    print(f"  Ciclo completado — {datetime.utcnow().strftime('%H:%M:%S')} UTC")
 
 if __name__ == "__main__":
     enviar_telegram(
-        "🤖 <b>Bot Binance v4</b>\n"
+        "🤖 <b>Bot Binance v5 — 24/7 GLOBAL</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 Thread pump dedicado — ciclo 20s\n"
+        "🌍 Sin restricciones horarias\n"
+        "🚀 Pump thread: ciclo 15s\n"
+        "🔄 Loop principal: ciclo 90s\n"
         "✂️ Cut loss: -0.3% por 5min\n"
         "🔄 Rebalanceo dinámico activo\n"
-        "📊 Scalping + Monitor + Listings"
+        "📊 Scalping + Monitor + Listings 24/7"
     )
 
-    pump_thread = threading.Thread(target=ciclo_pump_agresivo, daemon=True)
-    pump_thread.start()
-    print("  [PUMP THREAD] Lanzado ✓")
+    threading.Thread(target=ciclo_pump_agresivo, daemon=True).start()
+    print("  [PUMP THREAD] Lanzado 24/7 ✓")
 
     while True:
         try:
@@ -1082,4 +983,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error main: {e}")
             enviar_telegram(f"⚠️ Error: {e}")
-        time.sleep(120)
+        time.sleep(CICLO_MAIN_SEGUNDOS)
