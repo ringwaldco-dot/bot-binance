@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import threading
 import numpy as np
 import requests
 from datetime import datetime, timedelta
@@ -24,19 +25,25 @@ TELEGRAM_CHAT_ID = "1576867878"
 
 CAPITAL_TOTAL = 30.0
 MAX_POSICIONES = 3
+MAX_POSICIONES_PUMP = 2         # máximo 2 pumps simultáneos
 MONTO_BASE = CAPITAL_TOTAL / MAX_POSICIONES
 MONTO_MIN = 5.0
 MONTO_MAX = 20.0
+MONTO_PUMP = 7.0                # monto fijo por operación pump
 TAKE_PROFIT = 0.012
-TAKE_PROFIT_PUMP = 0.018        # FIX: bajado de 0.025 → 0.018, más fácil de alcanzar
+TAKE_PROFIT_PUMP = 0.015        # 1.5% — rápido y seguro
 STOP_LOSS = 0.008
-TRAILING_STOP = 0.005           # FIX: bajado de 0.006 → 0.005, activa antes
+STOP_LOSS_PUMP = 0.006          # stop loss ajustado para pumps
+TRAILING_STOP = 0.005
 CRASH_THRESHOLD = -8.0
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
 RANKING_FILE = "ranking_pares.json"
 MONITOR_CICLO = 0
+
+# Lock para evitar condiciones de carrera entre threads
+_lock = threading.Lock()
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
@@ -85,9 +92,6 @@ def actualizar_ranking(par, ganancia_pct):
 def obtener_score_par(par):
     ranking = cargar_ranking()
     return ranking.get(par, {}).get('score', 50)
-
-def par_tiene_buen_score(par, minimo=30):
-    return obtener_score_par(par) >= minimo
 
 # ============================================================
 # TELEGRAM
@@ -173,10 +177,8 @@ def calcular_monto_dinamico(historial):
     ratio = ganancias / len(ultimas)
     if ratio >= 0.8:
         monto = MONTO_BASE * 1.3
-        print(f"  Racha ganadora ({ganancias}/{len(ultimas)}) - aumentando monto")
     elif ratio <= 0.3:
         monto = MONTO_BASE * 0.7
-        print(f"  Racha perdedora ({ganancias}/{len(ultimas)}) - reduciendo monto")
     else:
         monto = MONTO_BASE
     return round(max(MONTO_MIN, min(MONTO_MAX, monto)), 2)
@@ -217,6 +219,12 @@ def enviar_reporte_diario():
         ranking = cargar_ranking()
         top_pares = sorted(ranking.items(), key=lambda x: x[1]['score'], reverse=True)[:3]
         top_str = " | ".join([f"{p[0]}({p[1]['score']})" for p in top_pares]) if top_pares else "Sin datos"
+
+        pumps_g = [p for p in todas_ganancias if p.get('estrategia') == 'pump']
+        pumps_p = [p for p in todas_perdidas if p.get('estrategia') == 'pump']
+        scalp_g = [p for p in todas_ganancias if p.get('estrategia') != 'pump']
+        scalp_p = [p for p in todas_perdidas if p.get('estrategia') != 'pump']
+
         reporte = f"""📊 <b>REPORTE DIARIO</b> {ayer}
 ━━━━━━━━━━━━━━━━━━━━
 📈 Operaciones: {len(ops_ayer)}
@@ -224,13 +232,15 @@ def enviar_reporte_diario():
 🔴 Pérdidas: {len(perdidas)} ({total_p:.2f}%)
 💰 Neto del día: {neto:+.2f}%
 ━━━━━━━━━━━━━━━━━━━━
+🚀 Pump: {len(pumps_g)}G / {len(pumps_p)}P
+📉 Scalp/Monitor: {len(scalp_g)}G / {len(scalp_p)}P
+━━━━━━━━━━━━━━━━━━━━
 📦 Acumulado total: {neto_total:+.2f}%
 🚫 Pares en blacklist: {len(blacklist)}
 🏆 Top pares: {top_str}
 ━━━━━━━━━━━━━━━━━━━━
 🤖 Bot operando normalmente"""
         enviar_telegram(reporte)
-        # FIX: sentiment ampliado con descripción de contexto de mercado
         try:
             sig_btc = get_onchain_signal("BTCUSDT")
             sig_eth = get_onchain_signal("ETHUSDT")
@@ -363,12 +373,8 @@ def confirmar_dos_timeframes(par):
         rsi_1h = datos_1h['rsi']
         macd_1h = datos_1h['macd'] > datos_1h['macd_signal']
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
-
-        # FIX: umbrales RSI más amplios (45/55 en vez de 40/50)
         señales_5m = sum([rsi_5m < 45, macd_5m, bb_5m])
         señales_1h = sum([rsi_1h < 55, macd_1h, bb_1h])
-
-        # FIX: alcanza con señal en CUALQUIER timeframe (antes exigía ambos)
         confirmado = señales_5m >= 1 or señales_1h >= 1
         razon = f"5m: {señales_5m}/3 | 1h: {señales_1h}/3"
         return confirmado, razon
@@ -400,43 +406,25 @@ def analizar_sentimiento_groq(par, datos_5m, datos_1h, cambio_24h, modo, score_p
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
 
         if onchain_score >= 0.35:
-            onchain_desc = f"ALCISTA ({onchain_score:+.2f}) — presión compradora, funding ok"
+            onchain_desc = f"ALCISTA ({onchain_score:+.2f})"
         elif onchain_score >= 0.15:
-            onchain_desc = f"LEVEMENTE ALCISTA ({onchain_score:+.2f}) — señales mixtas positivas"
+            onchain_desc = f"LEVEMENTE ALCISTA ({onchain_score:+.2f})"
         elif onchain_score <= -0.35:
-            onchain_desc = f"BAJISTA ({onchain_score:+.2f}) — alta presión vendedora, evitar longs"
+            onchain_desc = f"BAJISTA ({onchain_score:+.2f})"
         elif onchain_score <= -0.15:
-            onchain_desc = f"LEVEMENTE BAJISTA ({onchain_score:+.2f}) — precaución"
+            onchain_desc = f"LEVEMENTE BAJISTA ({onchain_score:+.2f})"
         else:
-            onchain_desc = f"NEUTRO ({onchain_score:+.2f}) — sin sesgo claro"
+            onchain_desc = f"NEUTRO ({onchain_score:+.2f})"
 
         prompt = f"""Sos un trader experto en crypto scalping.
 
-Par: {par}
-Score histórico del par: {score_par}/100
-Modo horario: {modo}
-Cambio 24h: {cambio_24h}%
+Par: {par} | Score: {score_par}/100 | Modo: {modo} | 24h: {cambio_24h}%
+5M: RSI {rsi_5m} | MACD {'▲' if macd_alcista_5m else '▼'} | BB {'PISO' if bb_5m else 'MEDIA'}
+1H: RSI {rsi_1h} | MACD {'▲' if macd_alcista_1h else '▼'} | BB {'PISO' if bb_1h else 'MEDIA'}
+OnChain: {onchain_desc}
 
-TIMEFRAME 5 MINUTOS:
-- RSI: {rsi_5m} {'(SOBREVENTA)' if rsi_5m < 35 else '(neutral)' if rsi_5m < 50 else '(sobrecompra)'}
-- MACD: {'ALCISTA' if macd_alcista_5m else 'BAJISTA'}
-- Bollinger: {'CERCA DEL PISO' if bb_5m else 'zona media'}
-
-TIMEFRAME 1 HORA:
-- RSI: {rsi_1h} {'(SOBREVENTA)' if rsi_1h < 40 else '(neutral)' if rsi_1h < 55 else '(sobrecompra)'}
-- MACD: {'ALCISTA' if macd_alcista_1h else 'BAJISTA'}
-- Bollinger: {'CERCA DEL PISO' if bb_1h else 'zona media'}
-
-SENTIMENT ON-CHAIN (futuros + mercado):
-- {onchain_desc}
-
-Reglas:
-- Comprá si al menos 1 timeframe tiene señales positivas
-- Si score_par < 30, sé conservador
-- Si score_par > 70, podés ser más agresivo
-- En modo nocturno, exigí señales en ambos timeframes
-- Si on-chain es BAJISTA, exigí señales técnicas fuertes para comprar
-- Si on-chain es ALCISTA, podés ser más permisivo
+Comprá si al menos 1 timeframe tiene señal positiva. Nocturno: exigí ambos.
+Si on-chain BAJISTA, exigí señales técnicas fuertes.
 
 Respondé SOLO con JSON:
 {{"comprar": true, "confianza": 8, "razon": "1 linea"}}"""
@@ -445,7 +433,7 @@ Respondé SOLO con JSON:
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=150
+            max_tokens=100
         )
         texto = respuesta.choices[0].message.content.strip()
         texto = texto.replace('```json', '').replace('```', '').strip()
@@ -479,11 +467,7 @@ def filtrar_candidatos(pares_tickers, modo):
         cambio = float(t['priceChangePercent'])
         volumen = float(t['quoteVolume'])
         par = t['symbol']
-
-        # FIX: rango ampliado — antes solo caídas (-10% a -1%)
-        # Ahora incluye zona plana y leve alza hasta +3% (nocturno: -0.5%)
         umbral_max = -0.5 if modo == 'nocturno' else 3.0
-
         if -10 <= cambio <= umbral_max and volumen > 2000000 and not esta_en_blacklist(par):
             score = obtener_score_par(par)
             candidatos.append({
@@ -492,42 +476,8 @@ def filtrar_candidatos(pares_tickers, modo):
                 'volumen': volumen,
                 'score': score
             })
-
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
-    return candidatos[:20]  # FIX: de 15 → 20 candidatos
-
-def detectar_pumps(pares_tickers):
-    pumps = []
-    for t in pares_tickers:
-        par = t['symbol']
-        if esta_en_blacklist(par):
-            continue
-        volumen = float(t['quoteVolume'])
-        try:
-            klines = client_binance.get_klines(symbol=par, interval='1m', limit=10)
-            precios = [float(k[4]) for k in klines]
-            volumenes = [float(k[5]) for k in klines]
-            cambio_5m = ((precios[-1] - precios[-5]) / precios[-5]) * 100
-            volumen_promedio = np.mean(volumenes[:-3])
-            volumen_actual = np.mean(volumenes[-3:])
-            ratio_volumen = volumen_actual / volumen_promedio if volumen_promedio > 0 else 1
-
-            # FIX: más permisivo — antes cambio_5m >= 1.0 y ratio >= 3.0
-            # Ahora: cambio_5m >= 0.5 y ratio >= 2.0
-            if (0.5 <= cambio_5m <= 8.0 and ratio_volumen >= 2.0 and volumen > 1000000):
-                pumps.append({
-                    'par': par,
-                    'cambio_5m': round(cambio_5m, 3),
-                    'cambio_24h': float(t['priceChangePercent']),
-                    'ratio_volumen': round(ratio_volumen, 2),
-                    'volumen': volumen,
-                    'score': obtener_score_par(par)
-                })
-        except:
-            continue
-        time.sleep(0.1)
-    pumps.sort(key=lambda x: (x['ratio_volumen'] + x['score']/20), reverse=True)
-    return pumps[:5]
+    return candidatos[:20]
 
 def ejecutar_compra(par, monto, datos):
     try:
@@ -535,7 +485,8 @@ def ejecutar_compra(par, monto, datos):
         qty = float(orden['executedQty'])
         precio = float(orden['fills'][0]['price']) if orden.get('fills') else obtener_precio(par)
         print(f"   COMPRA OK! {qty} {par} a ${precio}")
-        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI: {datos['rsi']} | Score: {obtener_score_par(par)}/100\n💵 Monto: ${monto}")
+        rsi_val = datos['rsi'] if isinstance(datos, dict) else datos
+        enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 Precio: ${precio}\n📊 RSI: {rsi_val} | Score: {obtener_score_par(par)}/100\n💵 Monto: ${monto}")
         return True, qty, precio
     except Exception as e:
         print(f"   Error comprando: {e}")
@@ -560,66 +511,248 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         print(f"   Error vendiendo: {e}")
         return False
 
-# FIX: revisión rápida exclusiva para pumps cada 30 segundos
-def revisar_posiciones_pump_rapido():
+# ============================================================
+# THREAD DEDICADO A PUMPS
+# ============================================================
+def detectar_pumps_rapido():
+    """
+    Escaneo rápido sin onchain — solo precio y volumen en 1m.
+    Corre cada 20 segundos desde el thread dedicado.
+    """
+    try:
+        tickers = client_binance.get_ticker()
+        usdt_pares = [
+            t for t in tickers
+            if t['symbol'].endswith('USDT')
+            and float(t['quoteVolume']) > 1000000
+            and float(t['lastPrice']) > 0.0001
+            and float(t['lastPrice']) < 500
+            and not esta_en_blacklist(t['symbol'])
+        ]
+        pumps = []
+        for t in usdt_pares[:100]:
+            par = t['symbol']
+            try:
+                klines = client_binance.get_klines(symbol=par, interval='1m', limit=8)
+                precios = [float(k[4]) for k in klines]
+                volumenes = [float(k[5]) for k in klines]
+                cambio_3m = ((precios[-1] - precios[-3]) / precios[-3]) * 100
+                cambio_5m = ((precios[-1] - precios[-5]) / precios[-5]) * 100
+                vol_promedio = np.mean(volumenes[:-2])
+                vol_actual = np.mean(volumenes[-2:])
+                ratio_vol = vol_actual / vol_promedio if vol_promedio > 0 else 1
+                rsi = calcular_rsi(precios)
+                if (cambio_3m >= 0.4
+                        and cambio_5m >= 0.5
+                        and ratio_vol >= 1.8
+                        and rsi < 75
+                        and float(t['quoteVolume']) > 1000000):
+                    pumps.append({
+                        'par': par,
+                        'cambio_3m': round(cambio_3m, 3),
+                        'cambio_5m': round(cambio_5m, 3),
+                        'ratio_vol': round(ratio_vol, 2),
+                        'rsi': round(rsi, 1),
+                        'score': obtener_score_par(par)
+                    })
+            except:
+                continue
+            time.sleep(0.05)
+        pumps.sort(key=lambda x: x['ratio_vol'] * (1 + x['score'] / 100), reverse=True)
+        return pumps[:3]
+    except Exception as e:
+        print(f"  Error detectar_pumps_rapido: {e}")
+        return []
+
+def _cerrar_posicion_historial(par, precio_actual, pct, estado):
+    """Actualiza el historial al cerrar una posición pump."""
     historial = cargar_historial()
-    pumps_abiertos = [p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') == 'pump']
-    if not pumps_abiertos:
-        return
-    cerradas = 0
     for i, pos in enumerate(historial):
-        if pos.get('estado') != 'abierta' or pos.get('estrategia') != 'pump':
-            continue
-        precio_actual = obtener_precio(pos['par'])
+        if (pos.get('par') == par
+                and pos.get('estado') == 'abierta'
+                and pos.get('estrategia') == 'pump'):
+            historial[i]['estado'] = estado
+            historial[i]['precio_venta'] = precio_actual
+            historial[i]['ganancia_pct'] = pct
+            historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            break
+    guardar_historial(historial)
+
+def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
+    """
+    Vigila una posición pump con chequeo cada 5 segundos.
+    TP: 1.5% | SL: 0.6% | Timeout: 5 minutos
+    """
+    precio_maximo = precio_compra
+    inicio = time.time()
+    timeout = 300  # 5 minutos máximo
+    print(f"  [WATCH] {par} entrada ${precio_compra:.6f} | TP {TAKE_PROFIT_PUMP*100}% SL {STOP_LOSS_PUMP*100}%")
+
+    while time.time() - inicio < timeout:
+        time.sleep(5)
+        precio_actual = obtener_precio(par)
         if not precio_actual:
             continue
-        precio_compra = float(pos['precio_compra'])
-        cambio = (precio_actual - precio_compra) / precio_compra
-        pct = round(cambio * 100, 3)
-        precio_maximo = float(pos.get('precio_maximo', precio_compra))
+
         if precio_actual > precio_maximo:
             precio_maximo = precio_actual
-            historial[i]['precio_maximo'] = precio_maximo
-        caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
-        ganancia_actual = (precio_actual - precio_compra) / precio_compra
-        trailing_activado = ganancia_actual >= TAKE_PROFIT and caida_desde_maximo >= TRAILING_STOP
 
-        if trailing_activado:
-            print(f"  [PUMP RAPIDO] TRAILING {pos['par']} +{pct}%")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
-                historial[i]['estado'] = 'cerrada_ganancia'
-                historial[i]['precio_venta'] = precio_actual
-                historial[i]['ganancia_pct'] = pct
-                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cerradas += 1
-        elif cambio >= TAKE_PROFIT_PUMP:
-            print(f"  [PUMP RAPIDO] TAKE PROFIT {pos['par']} +{pct}%!")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'pump'):
-                historial[i]['estado'] = 'cerrada_ganancia'
-                historial[i]['precio_venta'] = precio_actual
-                historial[i]['ganancia_pct'] = pct
-                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cerradas += 1
-        elif cambio <= -STOP_LOSS:
-            print(f"  [PUMP RAPIDO] STOP LOSS {pos['par']} {pct}%")
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
-                historial[i]['estado'] = 'cerrada_perdida'
-                historial[i]['precio_venta'] = precio_actual
-                historial[i]['ganancia_pct'] = pct
-                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cerradas += 1
-    if cerradas > 0:
-        guardar_historial(historial)
+        cambio = (precio_actual - precio_compra) / precio_compra
+        pct = round(cambio * 100, 3)
+        caida_desde_max = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
 
+        # Trailing stop
+        if cambio >= TAKE_PROFIT and caida_desde_max >= TRAILING_STOP:
+            print(f"  [WATCH] TRAILING {par} +{pct}%")
+            with _lock:
+                ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing')
+                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
+            return
+
+        # Take profit
+        if cambio >= TAKE_PROFIT_PUMP:
+            print(f"  [WATCH] TAKE PROFIT {par} +{pct}%!")
+            with _lock:
+                ejecutar_venta(par, cantidad, precio_actual, pct, 'pump')
+                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
+            return
+
+        # Stop loss
+        if cambio <= -STOP_LOSS_PUMP:
+            print(f"  [WATCH] STOP LOSS {par} {pct}%")
+            with _lock:
+                ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida')
+                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_perdida')
+            return
+
+    # Timeout — salir al precio actual sin importar resultado
+    precio_actual = obtener_precio(par) or precio_compra
+    cambio = (precio_actual - precio_compra) / precio_compra
+    pct = round(cambio * 100, 3)
+    print(f"  [WATCH] TIMEOUT {par} {pct}% — cerrando")
+    with _lock:
+        tipo = 'ganancia' if pct > 0 else 'perdida'
+        ejecutar_venta(par, cantidad, precio_actual, pct, tipo)
+        estado = 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida'
+        _cerrar_posicion_historial(par, precio_actual, pct, estado)
+
+def ciclo_pump_agresivo():
+    """
+    Thread dedicado — completamente independiente del loop principal.
+    Escanea cada 20s, compra pumps, lanza vigilancia en sub-thread y vuelve.
+    En modo nocturno duerme 60s.
+    """
+    print("  [PUMP THREAD] Iniciado ✓")
+    while True:
+        try:
+            modo, _, _ = obtener_modo_horario()
+            if modo == 'nocturno':
+                time.sleep(60)
+                continue
+
+            # Leer estado actual con lock
+            with _lock:
+                historial = cargar_historial()
+                pumps_abiertos = len([p for p in historial
+                                      if p.get('estado') == 'abierta'
+                                      and p.get('estrategia') == 'pump'])
+                total_abiertos = len([p for p in historial if p.get('estado') == 'abierta'])
+                capital = obtener_capital_disponible()
+
+            if pumps_abiertos >= MAX_POSICIONES_PUMP or total_abiertos >= MAX_POSICIONES:
+                time.sleep(20)
+                continue
+
+            if capital < MONTO_MIN:
+                time.sleep(30)
+                continue
+
+            pumps = detectar_pumps_rapido()
+            if not pumps:
+                time.sleep(20)
+                continue
+
+            print(f"\n  [PUMP THREAD] {len(pumps)} candidatos — {datetime.now().strftime('%H:%M:%S')}")
+
+            for p in pumps:
+                par = p['par']
+
+                with _lock:
+                    historial = cargar_historial()
+                    pares_en_uso = {pos['par'] for pos in historial if pos.get('estado') == 'abierta'}
+                    pumps_abiertos = len([pos for pos in historial
+                                          if pos.get('estado') == 'abierta'
+                                          and pos.get('estrategia') == 'pump'])
+                    total_abiertos = len([pos for pos in historial if pos.get('estado') == 'abierta'])
+                    capital = obtener_capital_disponible()
+
+                if par in pares_en_uso or esta_en_blacklist(par):
+                    continue
+                if pumps_abiertos >= MAX_POSICIONES_PUMP or total_abiertos >= MAX_POSICIONES:
+                    break
+                if capital < MONTO_MIN:
+                    break
+
+                monto = min(MONTO_PUMP, capital * 0.9)
+                if monto < MONTO_MIN:
+                    continue
+
+                print(f"  [PUMP THREAD] ENTRANDO {par} | +{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']} | ${monto}")
+
+                with _lock:
+                    exito, cantidad, precio = ejecutar_compra(par, monto, {'rsi': p['rsi']})
+                    if exito:
+                        historial = cargar_historial()
+                        historial.append({
+                            'par': par,
+                            'precio_compra': precio,
+                            'precio_maximo': precio,
+                            'cantidad': cantidad,
+                            'monto': monto,
+                            'rsi_entrada': p['rsi'],
+                            'confianza': 9,
+                            'razon': f"PUMP {p['cambio_5m']}% vol {p['ratio_vol']}x",
+                            'onchain_score': 0.0,
+                            'estado': 'abierta',
+                            'estrategia': 'pump',
+                            'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        guardar_historial(historial)
+
+                        enviar_telegram(
+                            f"🚀 <b>PUMP</b> {par}\n"
+                            f"📈 +{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']}\n"
+                            f"💰 ${monto} | TP: {TAKE_PROFIT_PUMP*100}% | SL: {STOP_LOSS_PUMP*100}%\n"
+                            f"⏱ Vigilancia cada 5s"
+                        )
+
+                        # Sub-thread de vigilancia — no bloquea el ciclo
+                        t = threading.Thread(
+                            target=vigilar_posicion_pump,
+                            args=(par, precio, cantidad, monto),
+                            daemon=True
+                        )
+                        t.start()
+
+        except Exception as e:
+            print(f"  [PUMP THREAD] Error: {e}")
+
+        time.sleep(20)
+
+# ============================================================
+# REVISAR POSICIONES SCALP/MONITOR
+# ============================================================
 def revisar_posiciones(tp_actual, sl_actual):
     historial = cargar_historial()
-    posiciones = [p for p in historial if p.get('estado') == 'abierta']
+    # Pumps los maneja su propio thread — aquí solo scalp/monitor/listing
+    posiciones = [p for p in historial
+                  if p.get('estado') == 'abierta' and p.get('estrategia') != 'pump']
     if not posiciones:
         return 0
-    print(f"\nRevisando {len(posiciones)} posiciones...")
+    print(f"\nRevisando {len(posiciones)} posiciones scalp/monitor...")
     cerradas = 0
     for i, pos in enumerate(historial):
-        if pos.get('estado') != 'abierta':
+        if pos.get('estado') != 'abierta' or pos.get('estrategia') == 'pump':
             continue
         precio_actual = obtener_precio(pos['par'])
         if not precio_actual:
@@ -627,16 +760,14 @@ def revisar_posiciones(tp_actual, sl_actual):
         precio_compra = float(pos['precio_compra'])
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
-        estrategia = pos.get('estrategia', 'scalp')
-        tp = TAKE_PROFIT_PUMP if estrategia == 'pump' else tp_actual
         precio_maximo = float(pos.get('precio_maximo', precio_compra))
         if precio_actual > precio_maximo:
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
-        caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
+        caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
         ganancia_actual = (precio_actual - precio_compra) / precio_compra
         trailing_activado = ganancia_actual >= tp_actual and caida_desde_maximo >= TRAILING_STOP
-        print(f"  {pos['par']} [{estrategia}] | {pct:+.3f}% | Max: {precio_maximo:.4f} | Score: {obtener_score_par(pos['par'])}")
+        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | Max: {precio_maximo:.6f}")
         if trailing_activado:
             print(f"  TRAILING STOP! +{pct}%")
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
@@ -645,10 +776,9 @@ def revisar_posiciones(tp_actual, sl_actual):
                 historial[i]['ganancia_pct'] = pct
                 historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cerradas += 1
-        elif cambio >= tp:
+        elif cambio >= tp_actual:
             print(f"  TAKE PROFIT +{pct}%!")
-            tipo_venta = 'pump' if estrategia == 'pump' else 'ganancia'
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, tipo_venta):
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'ganancia'):
                 historial[i]['estado'] = 'cerrada_ganancia'
                 historial[i]['precio_venta'] = precio_actual
                 historial[i]['ganancia_pct'] = pct
@@ -677,7 +807,8 @@ def mostrar_resumen():
     g_pct = sum(p.get('ganancia_pct', 0) for p in ganancias)
     p_pct = sum(p.get('ganancia_pct', 0) for p in perdidas)
     blacklist = cargar_blacklist()
-    print(f"  G: {len(ganancias)} (+{g_pct:.2f}%) | P: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} | Neto: {g_pct+p_pct:+.2f}% | BL: {len(blacklist)}")
+    pumps_ab = len([p for p in abiertas if p.get('estrategia') == 'pump'])
+    print(f"  G: {len(ganancias)} (+{g_pct:.2f}%) | P: {len(perdidas)} ({p_pct:.2f}%) | Abiertas: {len(abiertas)} (pump:{pumps_ab}) | Neto: {g_pct+p_pct:+.2f}% | BL: {len(blacklist)}")
 
 def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_uso, posiciones_abiertas, tp_actual, sl_actual):
     for señal in señales:
@@ -745,20 +876,22 @@ def main():
     hora = datetime.now().hour
 
     print("="*60)
-    print(f"  BOT DEFINITIVO - Modo: {modo.upper()} ({hora}hs)")
+    print(f"  BOT v3 - Modo: {modo.upper()} ({hora}hs)")
     print("="*60)
     print(f"  TP: {tp_actual*100}% | SL: {sl_actual*100}% | Trail: {TRAILING_STOP*100}%")
     mostrar_resumen()
     print("="*60)
 
     enviar_reporte_diario()
-    revisar_posiciones(tp_actual, sl_actual)
+
+    with _lock:
+        revisar_posiciones(tp_actual, sl_actual)
 
     historial = cargar_historial()
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
 
     if posiciones_abiertas >= MAX_POSICIONES:
-        print(f"\nMaximo de posiciones. Esperando cierres.")
+        print(f"\nMaximo de posiciones ({posiciones_abiertas}/{MAX_POSICIONES}). Esperando cierres.")
         return
 
     capital_disponible = obtener_capital_disponible()
@@ -774,7 +907,7 @@ def main():
 
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
-    # MONITOR AMPLIO cada 5 ciclos (~10 minutos)
+    # MONITOR AMPLIO cada 5 ciclos
     MONITOR_CICLO += 1
     if MONITOR_CICLO >= 5:
         MONITOR_CICLO = 0
@@ -799,21 +932,15 @@ def main():
                 par = listing['par']
                 if par in pares_en_uso or esta_en_blacklist(par):
                     continue
-                print(f"  NUEVO LISTING! {par} | ${listing['precio']} | {listing['cambio_24h']}%")
+                print(f"  NUEVO LISTING! {par}")
                 enviar_telegram(
-                    f"🆕 <b>NUEVO LISTING BINANCE</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"Par: <b>{par}</b>\n"
-                    f"Precio: <code>${listing['precio']}</code>\n"
-                    f"Vol 24h: <code>${listing['volumen_24h']:,.0f}</code>\n"
-                    f"Cambio: <code>{listing['cambio_24h']:+.2f}%</code>\n"
-                    f"Evaluando entrada..."
+                    f"🆕 <b>NUEVO LISTING</b> {par}\n"
+                    f"Precio: ${listing['precio']} | {listing['cambio_24h']:+.2f}%"
                 )
                 sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
                 try:
                     sig = get_onchain_signal(par)
                     if sig['block']:
-                        print(f"  BLOQUEADO por on-chain")
                         continue
                 except:
                     pass
@@ -826,14 +953,13 @@ def main():
                 monto = round(monto * 0.5, 2)
                 if monto < MONTO_MIN:
                     continue
-                print(f"  ENTRADA LISTING! ${monto} (50% monto)")
                 exito, cantidad, precio = ejecutar_compra(par, monto, datos)
                 if exito:
                     historial.append({
                         'par': par, 'precio_compra': precio, 'precio_maximo': precio,
                         'cantidad': cantidad, 'monto': monto,
                         'rsi_entrada': datos['rsi'],
-                        'confianza': 9, 'razon': 'NUEVO LISTING BINANCE',
+                        'confianza': 9, 'razon': 'NUEVO LISTING',
                         'onchain_score': sig['score'],
                         'estado': 'abierta', 'estrategia': 'listing',
                         'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -844,58 +970,6 @@ def main():
                     capital_disponible -= monto
         except Exception as e:
             print(f"  Error listing detector: {e}")
-
-    # PUMPS
-    if modo != 'nocturno':
-        print(f"\nDetectando pumps...")
-        pumps = detectar_pumps(mejores_pares)
-        print(f"{len(pumps)} pumps\n")
-        for p in pumps:
-            if posiciones_abiertas >= MAX_POSICIONES:
-                break
-            if p['par'] in pares_en_uso:
-                continue
-            par = p['par']
-            print(f"PUMP! {par} | +{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}")
-            datos = obtener_datos_mercado(par)
-            if not datos or datos['rsi'] > 72:
-                continue
-            if es_caida_libre(par, p['cambio_24h']):
-                continue
-            sig = {"score": 0.0, "action": "NEUTRAL", "block": False, "emoji": "⚪"}
-            try:
-                sig = get_onchain_signal(par)
-                print(f"  OnChain: {sig['action']} ({sig['score']:+.3f})")
-                if sig['block']:
-                    print(f"  BLOQUEADO por sentiment on-chain")
-                    continue
-            except Exception as e:
-                print(f"  OnChain error (ignorando): {e}")
-            monto = calcular_monto_diversificado(historial, capital_disponible)
-            if monto == 0:
-                continue
-            if sig['action'] == 'SLIGHT_SHORT':
-                monto = round(monto * 0.7, 2)
-                print(f"  Monto reducido a ${monto} por on-chain negativo")
-            exito, cantidad, precio = ejecutar_compra(par, monto, datos)
-            if exito:
-                historial.append({
-                    'par': par, 'precio_compra': precio, 'precio_maximo': precio,
-                    'cantidad': cantidad, 'monto': monto, 'rsi_entrada': datos['rsi'],
-                    'confianza': 9, 'razon': f"PUMP +{p['cambio_5m']}% vol {p['ratio_volumen']}x",
-                    'onchain_score': sig['score'],
-                    'estado': 'abierta', 'estrategia': 'pump',
-                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
-                guardar_historial(historial)
-                posiciones_abiertas += 1
-                pares_en_uso.add(par)
-                capital_disponible -= monto
-                enviar_telegram(
-                    f"🚀 <b>PUMP</b> {par}\n"
-                    f"+{p['cambio_5m']}% | Vol {p['ratio_volumen']}x | Score {p['score']}\n"
-                    f"💰 ${monto} | OnChain: {sig['emoji']} {sig['score']:+.3f}"
-                )
 
     # SCALPING
     candidatos = filtrar_candidatos(mejores_pares, modo)
@@ -935,10 +1009,7 @@ def main():
         )
         if not analisis:
             continue
-
-        # FIX: confianza mínima reducida — nocturno: 7, activo/normal: 6
         confianza_minima = 7 if modo == 'nocturno' else 6
-
         if sig['action'] == 'SLIGHT_SHORT':
             confianza_minima = min(8, confianza_minima + 1)
             print(f"  Umbral subido a {confianza_minima}/10 por on-chain negativo")
@@ -975,26 +1046,24 @@ def main():
 
 if __name__ == "__main__":
     enviar_telegram(
-        "🤖 <b>Bot Binance DEFINITIVO v2</b>\n"
-        "✅ Pump exit rápido (30s)\n"
-        "✅ Más oportunidades scalping\n"
-        "✅ Pump detector más sensible\n"
-        "✅ Sentiment ampliado\n"
-        "📊 Todos los sistemas activos"
+        "🤖 <b>Bot Binance DEFINITIVO v3</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 Thread pump dedicado — ciclo 20s\n"
+        "⚡ Vigilancia pump cada 5s\n"
+        f"📉 TP pump: {TAKE_PROFIT_PUMP*100}% | SL pump: {STOP_LOSS_PUMP*100}%\n"
+        "📊 Scalping + Monitor + Listings activos"
     )
+
+    # Thread pump corre completamente en paralelo
+    pump_thread = threading.Thread(target=ciclo_pump_agresivo, daemon=True)
+    pump_thread.start()
+    print("  [PUMP THREAD] Lanzado ✓")
+
+    # Loop principal — scalping + monitor + listings cada 2 minutos
     while True:
         try:
             main()
         except Exception as e:
-            print(f"Error: {e}")
-            enviar_telegram(f"⚠️ Error: {e}")
-
-        # FIX: en vez de sleep(120) fijo, hace 4 checks cada 30s
-        # Los pumps se revisan cada 30 segundos para no perder el movimiento
-        for _ in range(4):
-            time.sleep(30)
-            try:
-                revisar_posiciones_pump_rapido()
-            except Exception as e:
-                print(f"  Error revisión rápida pump: {e}")
-
+            print(f"Error main: {e}")
+            enviar_telegram(f"⚠️ Error main: {e}")
+        time.sleep(120)
