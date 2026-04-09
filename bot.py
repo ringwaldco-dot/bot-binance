@@ -11,7 +11,7 @@ from groq import Groq
 
 from onchain_sentiment import get_onchain_signal, format_signal_telegram
 from market_monitor import MonitorMercado
-from listing_detector import ListingDetector  # NUEVO
+from listing_detector import ListingDetector
 
 load_dotenv()
 
@@ -28,9 +28,9 @@ MONTO_BASE = CAPITAL_TOTAL / MAX_POSICIONES
 MONTO_MIN = 5.0
 MONTO_MAX = 20.0
 TAKE_PROFIT = 0.012
-TAKE_PROFIT_PUMP = 0.025
+TAKE_PROFIT_PUMP = 0.018        # FIX: bajado de 0.025 → 0.018, más fácil de alcanzar
 STOP_LOSS = 0.008
-TRAILING_STOP = 0.006
+TRAILING_STOP = 0.005           # FIX: bajado de 0.006 → 0.005, activa antes
 CRASH_THRESHOLD = -8.0
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
@@ -41,7 +41,7 @@ MONITOR_CICLO = 0
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 client_groq = Groq(api_key=GROQ_API_KEY)
 monitor_mercado = MonitorMercado()
-listing_detector = ListingDetector()  # NUEVO
+listing_detector = ListingDetector()
 
 # ============================================================
 # MODO HORARIO
@@ -230,16 +230,30 @@ def enviar_reporte_diario():
 ━━━━━━━━━━━━━━━━━━━━
 🤖 Bot operando normalmente"""
         enviar_telegram(reporte)
+        # FIX: sentiment ampliado con descripción de contexto de mercado
         try:
             sig_btc = get_onchain_signal("BTCUSDT")
             sig_eth = get_onchain_signal("ETHUSDT")
+            fear_greed_val = sig_btc['components']['fear_greed']['value']
+            fear_greed_label = sig_btc['components']['fear_greed']['label']
+            if fear_greed_val <= 20:
+                mercado_desc = "⚠️ Extremo miedo — posibles rebotes, operar con cautela"
+            elif fear_greed_val <= 40:
+                mercado_desc = "😟 Miedo — mercado deprimido, buscar rebotes"
+            elif fear_greed_val <= 60:
+                mercado_desc = "😐 Neutral — condiciones normales"
+            elif fear_greed_val <= 80:
+                mercado_desc = "😀 Codicia — mercado caliente, cuidado con sobrecompra"
+            else:
+                mercado_desc = "🔥 Extrema codicia — alto riesgo de corrección"
             resumen = (
                 f"📡 <b>Sentiment On-Chain — apertura del día</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"BTC {sig_btc['emoji']} <code>{sig_btc['score']:+.3f}</code> {sig_btc['action']}\n"
                 f"ETH {sig_eth['emoji']} <code>{sig_eth['score']:+.3f}</code> {sig_eth['action']}\n"
-                f"Fear &amp; Greed: <code>{sig_btc['components']['fear_greed']['value']}</code> "
-                f"({sig_btc['components']['fear_greed']['label']})"
+                f"Fear &amp; Greed: <code>{fear_greed_val}</code> ({fear_greed_label})\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"{mercado_desc}"
             )
             enviar_telegram(resumen)
         except Exception as e:
@@ -349,9 +363,13 @@ def confirmar_dos_timeframes(par):
         rsi_1h = datos_1h['rsi']
         macd_1h = datos_1h['macd'] > datos_1h['macd_signal']
         bb_1h = datos_1h['precio_actual'] <= datos_1h['bb_inf'] * 1.01
-        señales_5m = sum([rsi_5m < 40, macd_5m, bb_5m])
-        señales_1h = sum([rsi_1h < 50, macd_1h, bb_1h])
-        confirmado = señales_5m >= 1 and señales_1h >= 1
+
+        # FIX: umbrales RSI más amplios (45/55 en vez de 40/50)
+        señales_5m = sum([rsi_5m < 45, macd_5m, bb_5m])
+        señales_1h = sum([rsi_1h < 55, macd_1h, bb_1h])
+
+        # FIX: alcanza con señal en CUALQUIER timeframe (antes exigía ambos)
+        confirmado = señales_5m >= 1 or señales_1h >= 1
         razon = f"5m: {señales_5m}/3 | 1h: {señales_1h}/3"
         return confirmado, razon
     except:
@@ -413,12 +431,12 @@ SENTIMENT ON-CHAIN (futuros + mercado):
 - {onchain_desc}
 
 Reglas:
-- Solo comprá si AMBOS timeframes tienen al menos 1 señal positiva
-- Si score_par < 30, sé MUY conservador
+- Comprá si al menos 1 timeframe tiene señales positivas
+- Si score_par < 30, sé conservador
 - Si score_par > 70, podés ser más agresivo
-- En modo nocturno, solo entrá si hay 2+ señales en ambos timeframes
-- Si on-chain es BAJISTA, exigí señales técnicas MUY fuertes para comprar
-- Si on-chain es ALCISTA, podés ser ligeramente más permisivo
+- En modo nocturno, exigí señales en ambos timeframes
+- Si on-chain es BAJISTA, exigí señales técnicas fuertes para comprar
+- Si on-chain es ALCISTA, podés ser más permisivo
 
 Respondé SOLO con JSON:
 {{"comprar": true, "confianza": 8, "razon": "1 linea"}}"""
@@ -461,8 +479,12 @@ def filtrar_candidatos(pares_tickers, modo):
         cambio = float(t['priceChangePercent'])
         volumen = float(t['quoteVolume'])
         par = t['symbol']
-        umbral = -1.0 if modo != 'nocturno' else -2.0
-        if umbral >= cambio >= -10 and volumen > 2000000 and not esta_en_blacklist(par):
+
+        # FIX: rango ampliado — antes solo caídas (-10% a -1%)
+        # Ahora incluye zona plana y leve alza hasta +3% (nocturno: -0.5%)
+        umbral_max = -0.5 if modo == 'nocturno' else 3.0
+
+        if -10 <= cambio <= umbral_max and volumen > 2000000 and not esta_en_blacklist(par):
             score = obtener_score_par(par)
             candidatos.append({
                 'par': par,
@@ -470,8 +492,9 @@ def filtrar_candidatos(pares_tickers, modo):
                 'volumen': volumen,
                 'score': score
             })
+
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
-    return candidatos[:15]
+    return candidatos[:20]  # FIX: de 15 → 20 candidatos
 
 def detectar_pumps(pares_tickers):
     pumps = []
@@ -488,7 +511,10 @@ def detectar_pumps(pares_tickers):
             volumen_promedio = np.mean(volumenes[:-3])
             volumen_actual = np.mean(volumenes[-3:])
             ratio_volumen = volumen_actual / volumen_promedio if volumen_promedio > 0 else 1
-            if (1.0 <= cambio_5m <= 8.0 and ratio_volumen >= 3.0 and volumen > 1000000):
+
+            # FIX: más permisivo — antes cambio_5m >= 1.0 y ratio >= 3.0
+            # Ahora: cambio_5m >= 0.5 y ratio >= 2.0
+            if (0.5 <= cambio_5m <= 8.0 and ratio_volumen >= 2.0 and volumen > 1000000):
                 pumps.append({
                     'par': par,
                     'cambio_5m': round(cambio_5m, 3),
@@ -533,6 +559,57 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     except Exception as e:
         print(f"   Error vendiendo: {e}")
         return False
+
+# FIX: revisión rápida exclusiva para pumps cada 30 segundos
+def revisar_posiciones_pump_rapido():
+    historial = cargar_historial()
+    pumps_abiertos = [p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') == 'pump']
+    if not pumps_abiertos:
+        return
+    cerradas = 0
+    for i, pos in enumerate(historial):
+        if pos.get('estado') != 'abierta' or pos.get('estrategia') != 'pump':
+            continue
+        precio_actual = obtener_precio(pos['par'])
+        if not precio_actual:
+            continue
+        precio_compra = float(pos['precio_compra'])
+        cambio = (precio_actual - precio_compra) / precio_compra
+        pct = round(cambio * 100, 3)
+        precio_maximo = float(pos.get('precio_maximo', precio_compra))
+        if precio_actual > precio_maximo:
+            precio_maximo = precio_actual
+            historial[i]['precio_maximo'] = precio_maximo
+        caida_desde_maximo = (precio_maximo - precio_actual) / precio_maximo
+        ganancia_actual = (precio_actual - precio_compra) / precio_compra
+        trailing_activado = ganancia_actual >= TAKE_PROFIT and caida_desde_maximo >= TRAILING_STOP
+
+        if trailing_activado:
+            print(f"  [PUMP RAPIDO] TRAILING {pos['par']} +{pct}%")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
+                historial[i]['estado'] = 'cerrada_ganancia'
+                historial[i]['precio_venta'] = precio_actual
+                historial[i]['ganancia_pct'] = pct
+                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cerradas += 1
+        elif cambio >= TAKE_PROFIT_PUMP:
+            print(f"  [PUMP RAPIDO] TAKE PROFIT {pos['par']} +{pct}%!")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'pump'):
+                historial[i]['estado'] = 'cerrada_ganancia'
+                historial[i]['precio_venta'] = precio_actual
+                historial[i]['ganancia_pct'] = pct
+                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cerradas += 1
+        elif cambio <= -STOP_LOSS:
+            print(f"  [PUMP RAPIDO] STOP LOSS {pos['par']} {pct}%")
+            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
+                historial[i]['estado'] = 'cerrada_perdida'
+                historial[i]['precio_venta'] = precio_actual
+                historial[i]['ganancia_pct'] = pct
+                historial[i]['fecha_cierre'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cerradas += 1
+    if cerradas > 0:
+        guardar_historial(historial)
 
 def revisar_posiciones(tp_actual, sl_actual):
     historial = cargar_historial()
@@ -712,7 +789,7 @@ def main():
         except Exception as e:
             print(f"  Error monitor: {e}")
 
-    # DETECTOR DE NUEVOS LISTINGS (cada ciclo)
+    # DETECTOR DE NUEVOS LISTINGS
     if posiciones_abiertas < MAX_POSICIONES:
         try:
             nuevos_listings = listing_detector.detectar_nuevos()
@@ -746,7 +823,7 @@ def main():
                 monto = calcular_monto_diversificado(historial, capital_disponible)
                 if monto == 0:
                     continue
-                monto = round(monto * 0.5, 2)  # 50% del monto — listings son mas riesgosos
+                monto = round(monto * 0.5, 2)
                 if monto < MONTO_MIN:
                     continue
                 print(f"  ENTRADA LISTING! ${monto} (50% monto)")
@@ -858,9 +935,12 @@ def main():
         )
         if not analisis:
             continue
-        confianza_minima = 8 if modo == 'nocturno' else 7
+
+        # FIX: confianza mínima reducida — nocturno: 7, activo/normal: 6
+        confianza_minima = 7 if modo == 'nocturno' else 6
+
         if sig['action'] == 'SLIGHT_SHORT':
-            confianza_minima = min(9, confianza_minima + 1)
+            confianza_minima = min(8, confianza_minima + 1)
             print(f"  Umbral subido a {confianza_minima}/10 por on-chain negativo")
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             monto = calcular_monto_diversificado(historial, capital_disponible)
@@ -895,21 +975,26 @@ def main():
 
 if __name__ == "__main__":
     enviar_telegram(
-        "🤖 <b>Bot Binance DEFINITIVO</b>\n"
-        "⏰ Modo horario adaptativo\n"
-        "🏆 Ranking de pares\n"
-        "🔄 Auto-reinversion\n"
-        "📡 Sentiment On-Chain activado\n"
-        "🌐 Monitor amplio activado\n"
-        "🆕 Detector de nuevos listings activado\n"
-        "📊 Analisis completo activado"
+        "🤖 <b>Bot Binance DEFINITIVO v2</b>\n"
+        "✅ Pump exit rápido (30s)\n"
+        "✅ Más oportunidades scalping\n"
+        "✅ Pump detector más sensible\n"
+        "✅ Sentiment ampliado\n"
+        "📊 Todos los sistemas activos"
     )
     while True:
         try:
             main()
         except Exception as e:
             print(f"Error: {e}")
-            enviar_telegram(f"Error: {e}")
-        time.sleep(120)
+            enviar_telegram(f"⚠️ Error: {e}")
 
+        # FIX: en vez de sleep(120) fijo, hace 4 checks cada 30s
+        # Los pumps se revisan cada 30 segundos para no perder el movimiento
+        for _ in range(4):
+            time.sleep(30)
+            try:
+                revisar_posiciones_pump_rapido()
+            except Exception as e:
+                print(f"  Error revisión rápida pump: {e}")
 
