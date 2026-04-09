@@ -14,18 +14,20 @@ import re
 from datetime import datetime, timedelta
 from collections import defaultdict
 from dotenv import load_dotenv
-from groq import Groq
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
-GROQ_API_KEY      = os.getenv('GROQ_API_KEY')
-TELEGRAM_TOKEN    = os.getenv('TELEGRAM_TOKEN', '')
-TELEGRAM_CHAT_ID  = os.getenv('TELEGRAM_CHAT_ID', '')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', '')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; trading-bot/1.0)"}
 SENALES_FILE = "senales_monitor.json"
 
-client_groq = Groq(api_key=GROQ_API_KEY)
+client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHANNELS = [
@@ -57,7 +59,6 @@ COINS_IGNORAR = {
     'TURBO2', 'PEPE2', 'BONK2',
 }
 
-
 def enviar_telegram(mensaje):
     try:
         url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_TOKEN)
@@ -68,7 +69,6 @@ def enviar_telegram(mensaje):
         }, timeout=8)
     except:
         pass
-
 
 def obtener_trending_coingecko():
     try:
@@ -90,7 +90,6 @@ def obtener_trending_coingecko():
     except Exception as e:
         logger.warning("CoinGecko trending error: {}".format(e))
     return []
-
 
 def obtener_top_gainers():
     try:
@@ -124,12 +123,10 @@ def obtener_top_gainers():
         logger.warning("Top gainers error: {}".format(e))
     return []
 
-
 def obtener_menciones_reddit():
     subreddits = ['CryptoMoonShots', 'altcoin', 'CryptoCurrency', 'SatoshiStreetBets']
     menciones = defaultdict(int)
     textos = defaultdict(list)
-
     for sub in subreddits:
         try:
             url = "https://www.reddit.com/r/{}/new.json?limit=25".format(sub)
@@ -151,7 +148,6 @@ def obtener_menciones_reddit():
             time.sleep(0.5)
         except Exception as e:
             logger.warning("Reddit {} error: {}".format(sub, e))
-
     resultado = []
     for symbol, count in sorted(menciones.items(), key=lambda x: x[1], reverse=True)[:15]:
         if count >= 2:
@@ -161,15 +157,12 @@ def obtener_menciones_reddit():
                 'textos': textos[symbol][:3],
                 'fuente': 'reddit',
             })
-
     print("  Reddit menciones: {}".format([c['symbol'] for c in resultado[:5]]))
     return resultado
-
 
 def obtener_menciones_telegram():
     menciones = defaultdict(int)
     textos_raw = defaultdict(list)
-
     for channel_url in TELEGRAM_CHANNELS:
         try:
             r = requests.get(channel_url, headers=HEADERS, timeout=8)
@@ -184,7 +177,6 @@ def obtener_menciones_telegram():
             time.sleep(0.3)
         except Exception as e:
             logger.warning("Telegram scraping {}: {}".format(channel_url, e))
-
     resultado = []
     for symbol, count in sorted(menciones.items(), key=lambda x: x[1], reverse=True)[:15]:
         if count >= 1:
@@ -194,10 +186,8 @@ def obtener_menciones_telegram():
                 'canales': list(set(textos_raw[symbol]))[:3],
                 'fuente': 'telegram_web',
             })
-
     print("  Telegram menciones: {}".format([c['symbol'] for c in resultado[:5]]))
     return resultado
-
 
 def verificar_en_binance(symbol):
     if symbol in COINS_IGNORAR:
@@ -226,8 +216,8 @@ def verificar_en_binance(symbol):
     except:
         return {"existe": False, "razon": "error Binance"}
 
-
 def analizar_texto_groq(symbol, textos, fuentes):
+    """Análisis con Gemini 2.0 Flash (reemplaza Groq)."""
     texto_combinado = " ".join(textos).lower()
     for patron in BAIT_PATTERNS:
         if re.search(patron, texto_combinado, re.IGNORECASE):
@@ -236,45 +226,40 @@ def analizar_texto_groq(symbol, textos, fuentes):
                 "confianza": 0,
                 "razon": "patron de pump detectado",
             }
-
     try:
         prompt = """Sos un analista cripto experto en detectar manipulacion de mercado.
-
 Coin: {}
 Fuentes: {}
 Textos: {}
-
 Determina si es senal ORGANICA o pump/manipulacion.
 MANIPULACION: ganancias garantizadas, urgencia, next 100x, insider info.
 LEGITIMA: desarrollo real, volumen organico, analisis tecnico.
-
-Responde SOLO con JSON:
+Responde SOLO con JSON sin texto adicional:
 {{"legitimo": true, "confianza": 7, "razon": "1 linea"}}""".format(
             symbol,
             ', '.join(fuentes),
             '\n'.join(['- ' + t for t in textos[:5]])
         )
 
-        respuesta = client_groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=100
+        response = client_gemini.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=100,
+            )
         )
-        texto = respuesta.choices[0].message.content.strip()
-        texto = texto.replace('```json', '').replace('```', '').strip()
+        texto = response.text.strip().replace('```json', '').replace('```', '').strip()
         inicio = texto.find('{')
         fin = texto.rfind('}')
         if inicio != -1 and fin != -1:
             return json.loads(texto[inicio:fin+1])
     except Exception as e:
-        logger.warning("Groq analisis error: {}".format(e))
-
+        logger.warning("Gemini analisis error: {}".format(e))
     return {"legitimo": True, "confianza": 5, "razon": "sin analisis disponible"}
 
 
 class MonitorMercado:
-
     def __init__(self):
         self.senales_enviadas = self._cargar_senales()
 
@@ -304,8 +289,8 @@ class MonitorMercado:
         print("="*50)
 
         trending = obtener_trending_coingecko()
-        gainers  = obtener_top_gainers()
-        reddit   = obtener_menciones_reddit()
+        gainers = obtener_top_gainers()
+        reddit = obtener_menciones_reddit()
         telegram = obtener_menciones_telegram()
 
         mapa = defaultdict(lambda: {"fuentes": [], "textos": [], "datos": {}})
@@ -313,16 +298,13 @@ class MonitorMercado:
         for coin in trending:
             s = coin['symbol']
             mapa[s]["fuentes"].append("coingecko_trending")
-
         for coin in gainers:
             s = coin['symbol']
             mapa[s]["fuentes"].append("coingecko_gainers")
-
         for coin in reddit:
             s = coin['symbol']
             mapa[s]["fuentes"].append("reddit({}x)".format(coin['menciones']))
             mapa[s]["textos"].extend(coin.get('textos', []))
-
         for coin in telegram:
             s = coin['symbol']
             mapa[s]["fuentes"].append("telegram({}x)".format(coin['menciones']))
@@ -333,20 +315,16 @@ class MonitorMercado:
         for symbol, info in mapa.items():
             fuentes = info["fuentes"]
             n_fuentes = len(fuentes)
-
             if n_fuentes < 2:
                 continue
             if self._ya_procesado(symbol):
                 continue
-
             binance = verificar_en_binance(symbol)
             if not binance["existe"]:
                 print("  {} descartado - {}".format(symbol, binance['razon']))
                 continue
-
             textos = info["textos"] or ["{} mencionado en {}".format(symbol, ', '.join(fuentes))]
             analisis = analizar_texto_groq(symbol, textos, fuentes)
-
             if not analisis["legitimo"] or analisis["confianza"] < 6:
                 print("  {} BAIT - {}".format(symbol, analisis['razon']))
                 enviar_telegram(
@@ -356,7 +334,6 @@ class MonitorMercado:
                 )
                 self._marcar_procesado(symbol)
                 continue
-
             senal = {
                 "symbol": symbol,
                 "par_binance": binance["par"],
@@ -370,15 +347,13 @@ class MonitorMercado:
             }
             senales_verificadas.append(senal)
             self._marcar_procesado(symbol)
-
             print("  SENAL VERIFICADA: {} | {} fuentes | confianza {}/10".format(
                 symbol, n_fuentes, analisis['confianza']
             ))
-
             enviar_telegram(
                 "<b>SENAL VERIFICADA</b> - {}\n"
                 "Fuentes ({}): {}\n"
-                "Groq: {}/10 - {}\n"
+                "Gemini: {}/10 - {}\n"
                 "Binance 24h: {:+.2f}% | Vol: ${:,.0f}".format(
                     symbol,
                     n_fuentes, ', '.join(fuentes),
