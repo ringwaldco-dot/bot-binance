@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 import os
 import json
 import time
@@ -8,8 +9,7 @@ import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from binance.client import Client
-from groq import Groq
-
+import google.generativeai as genai
 from onchain_sentiment import get_onchain_signal, format_signal_telegram
 from market_monitor import MonitorMercado
 from listing_detector import ListingDetector
@@ -18,7 +18,7 @@ load_dotenv()
 
 BINANCE_API_KEY = os.getenv('BINANCE_API_KEY')
 BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 TELEGRAM_TOKEN = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
 TELEGRAM_CHAT_ID = "1576867878"
@@ -38,24 +38,36 @@ TRAILING_STOP = 0.005
 CRASH_THRESHOLD = -8.0
 CUT_LOSS_UMBRAL = -0.003
 CUT_LOSS_MINUTOS = 5
-CICLO_PUMP_SEGUNDOS = 15        # pump thread — cada 15s
-CICLO_MAIN_SEGUNDOS = 90        # loop principal — cada 90s
+CICLO_PUMP_SEGUNDOS = 15
+CICLO_MAIN_SEGUNDOS = 90
+
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
 RANKING_FILE = "ranking_pares.json"
-MONITOR_CICLO = 0
 
+MONITOR_CICLO = 0
 _lock = threading.Lock()
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-client_groq = Groq(api_key=GROQ_API_KEY)
+
+# Gemini 2.0 Flash — reemplaza Groq
+genai.configure(api_key=GEMINI_API_KEY)
+client_gemini = genai.GenerativeModel(
+    model_name='gemini-2.0-flash',
+    generation_config=genai.GenerationConfig(
+        temperature=0.2,
+        max_output_tokens=100,
+    )
+)
+
 monitor_mercado = MonitorMercado()
 listing_detector = ListingDetector()
 
 # ============================================================
 # MODO — 24/7 GLOBAL, SIN RESTRICCIONES HORARIAS
 # ============================================================
+
 def obtener_modo_horario():
     """Opera igual a las 3am que a las 3pm. Mercado crypto es global 24/7."""
     return 'activo', 0.012, 0.008
@@ -63,6 +75,7 @@ def obtener_modo_horario():
 # ============================================================
 # RANKING
 # ============================================================
+
 def cargar_ranking():
     if os.path.exists(RANKING_FILE):
         with open(RANKING_FILE, "r") as f:
@@ -93,6 +106,7 @@ def obtener_score_par(par):
 # ============================================================
 # TELEGRAM
 # ============================================================
+
 def enviar_telegram(mensaje):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -103,6 +117,7 @@ def enviar_telegram(mensaje):
 # ============================================================
 # HISTORIAL
 # ============================================================
+
 def cargar_historial():
     if os.path.exists(HISTORIAL_FILE):
         with open(HISTORIAL_FILE, "r") as f:
@@ -116,6 +131,7 @@ def guardar_historial(historial):
 # ============================================================
 # BLACKLIST
 # ============================================================
+
 def cargar_blacklist():
     if os.path.exists(BLACKLIST_FILE):
         with open(BLACKLIST_FILE, "r") as f:
@@ -165,6 +181,7 @@ def actualizar_blacklist_post_venta(par, ganancia_pct):
 # ============================================================
 # MONTO DINAMICO
 # ============================================================
+
 def calcular_monto_dinamico(historial):
     cerradas = [p for p in historial if p.get('estado') in ['cerrada_ganancia', 'cerrada_perdida']]
     if len(cerradas) < 3:
@@ -186,13 +203,14 @@ def calcular_monto_diversificado(historial, capital_disponible):
 # ============================================================
 # REPORTE DIARIO
 # ============================================================
+
 def enviar_reporte_diario():
     try:
         ultimo = {}
         if os.path.exists(REPORTE_FILE):
             with open(REPORTE_FILE, "r") as f:
                 ultimo = json.load(f)
-        hoy = datetime.utcnow().strftime("%Y-%m-%d")  # UTC para consistencia global
+        hoy = datetime.utcnow().strftime("%Y-%m-%d")
         if ultimo.get('fecha') == hoy or datetime.utcnow().hour != 8:
             return
         historial = cargar_historial()
@@ -246,6 +264,7 @@ def enviar_reporte_diario():
 # ============================================================
 # INDICADORES
 # ============================================================
+
 def obtener_precio(par):
     try:
         return float(client_binance.get_symbol_ticker(symbol=par)['price'])
@@ -342,12 +361,13 @@ def es_caida_libre(par, cambio_24h):
         return False
 
 def analizar_sentimiento_groq(par, d5, d1h, cambio_24h, modo, score_par, onchain_score=0.0):
+    """Análisis con Gemini 2.0 Flash (reemplaza Groq)."""
     try:
-        if onchain_score >= 0.35: oc = f"ALCISTA ({onchain_score:+.2f})"
+        if onchain_score >= 0.35:   oc = f"ALCISTA ({onchain_score:+.2f})"
         elif onchain_score >= 0.15: oc = f"LEV.ALCISTA ({onchain_score:+.2f})"
         elif onchain_score <= -0.35: oc = f"BAJISTA ({onchain_score:+.2f})"
         elif onchain_score <= -0.15: oc = f"LEV.BAJISTA ({onchain_score:+.2f})"
-        else: oc = f"NEUTRO ({onchain_score:+.2f})"
+        else:                        oc = f"NEUTRO ({onchain_score:+.2f})"
 
         prompt = f"""Trader experto crypto scalping 24/7 global.
 Par:{par} Score:{score_par}/100 24h:{cambio_24h}%
@@ -355,19 +375,15 @@ Par:{par} Score:{score_par}/100 24h:{cambio_24h}%
 1H: RSI {d1h['rsi']} MACD {'▲' if d1h['macd']>d1h['macd_signal'] else '▼'} BB {'PISO' if d1h['precio_actual']<=d1h['bb_inf']*1.01 else 'MED'}
 OnChain:{oc}
 Comprá si 1+ timeframe positivo. OnChain BAJISTA: exigí señales fuertes.
-JSON: {{"comprar":true,"confianza":8,"razon":"1 linea"}}"""
+Responde SOLO JSON sin texto adicional: {{"comprar":true,"confianza":8,"razon":"1 linea"}}"""
 
-        r = client_groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2, max_tokens=100
-        )
-        texto = r.choices[0].message.content.strip().replace('```json','').replace('```','').strip()
+        response = client_gemini.generate_content(prompt)
+        texto = response.text.strip().replace('```json', '').replace('```', '').strip()
         i, f = texto.find('{'), texto.rfind('}')
         if i != -1 and f != -1:
             return json.loads(texto[i:f+1])
     except Exception as e:
-        print(f"   Error Groq: {e}")
+        print(f"  Error Gemini: {e}")
     return None
 
 def obtener_mejores_pares():
@@ -401,11 +417,11 @@ def ejecutar_compra(par, monto, datos):
         qty = float(orden['executedQty'])
         precio = float(orden['fills'][0]['price']) if orden.get('fills') else obtener_precio(par)
         rsi_val = datos['rsi'] if isinstance(datos, dict) else datos
-        print(f"   COMPRA OK! {qty} {par} a ${precio}")
+        print(f"  COMPRA OK! {qty} {par} a ${precio}")
         enviar_telegram(f"🟢 <b>COMPRA</b> {par}\n💰 ${precio} | RSI:{rsi_val} | Score:{obtener_score_par(par)}/100 | ${monto}")
         return True, qty, precio
     except Exception as e:
-        print(f"   Error comprando: {e}")
+        print(f"  Error comprando: {e}")
         return False, 0, 0
 
 def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
@@ -420,12 +436,13 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         actualizar_blacklist_post_venta(par, pct)
         return True
     except Exception as e:
-        print(f"   Error vendiendo: {e}")
+        print(f"  Error vendiendo: {e}")
         return False
 
 # ============================================================
 # CUT LOSS AGRESIVO
 # ============================================================
+
 def revisar_cut_loss():
     with _lock:
         historial = cargar_historial()
@@ -438,13 +455,11 @@ def revisar_cut_loss():
                 continue
             cambio = (precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])
             pct = round(cambio * 100, 3)
-
             if cambio >= 0:
                 if historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = None
                     cambios = True
                 continue
-
             if cambio <= CUT_LOSS_UMBRAL:
                 ahora = datetime.now()
                 if not historial[i].get('en_perdida_desde'):
@@ -472,13 +487,13 @@ def revisar_cut_loss():
                 if historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = None
                     cambios = True
-
         if cambios:
             guardar_historial(historial)
 
 # ============================================================
 # REBALANCEO DINAMICO
 # ============================================================
+
 def elegir_posicion_sacrificable():
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta']
@@ -503,17 +518,14 @@ def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
         return 0
     if tipo == 'scalp' and confianza < 7:
         return 0
-
     sacrificable = elegir_posicion_sacrificable()
     if not sacrificable:
         return 0
-
     par = sacrificable['par']
     pct = sacrificable['cambio_pct']
     precio_actual = sacrificable['precio_actual']
     cantidad = sacrificable['cantidad']
     opp = oportunidad.get('par', oportunidad.get('par_binance', '?'))
-
     print(f"  [REBALANCEO] {par} ({pct:+.3f}%) → {opp}")
     with _lock:
         if ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida' if pct < 0 else 'ganancia'):
@@ -540,6 +552,7 @@ def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
 # ============================================================
 # THREAD DEDICADO A PUMPS — 24/7, ciclo 15s
 # ============================================================
+
 def detectar_pumps_rapido():
     try:
         tickers = client_binance.get_ticker()
@@ -601,33 +614,31 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-
         if cambio >= TAKE_PROFIT and caida >= TRAILING_STOP:
             print(f"  [WATCH] TRAILING {par} +{pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing')
-                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
+            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
             return
         if cambio >= TAKE_PROFIT_PUMP:
             print(f"  [WATCH] TP {par} +{pct}%!")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'pump')
-                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
+            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
             return
         if cambio <= -STOP_LOSS_PUMP:
             print(f"  [WATCH] SL {par} {pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida')
-                _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_perdida')
+            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_perdida')
             return
-
     precio_actual = obtener_precio(par) or precio_compra
     cambio = (precio_actual - precio_compra) / precio_compra
     pct = round(cambio * 100, 3)
     print(f"  [WATCH] TIMEOUT {par} {pct}%")
     with _lock:
         ejecutar_venta(par, cantidad, precio_actual, pct, 'ganancia' if pct > 0 else 'perdida')
-        _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida')
+    _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida')
 
 def ciclo_pump_agresivo():
     """Thread pump — 24/7, sin pausa nocturna, ciclo 15s."""
@@ -639,18 +650,14 @@ def ciclo_pump_agresivo():
                 pumps_ab = len([p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') == 'pump'])
                 total_ab = len([p for p in historial if p.get('estado') == 'abierta'])
                 capital = obtener_capital_disponible()
-
             if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
                 time.sleep(CICLO_PUMP_SEGUNDOS)
                 continue
-
             pumps = detectar_pumps_rapido()
             if not pumps:
                 time.sleep(CICLO_PUMP_SEGUNDOS)
                 continue
-
             print(f"\n  [PUMP] {len(pumps)} candidatos — {datetime.utcnow().strftime('%H:%M:%S')} UTC")
-
             for p in pumps:
                 par = p['par']
                 with _lock:
@@ -659,12 +666,10 @@ def ciclo_pump_agresivo():
                     pumps_ab = len([pos for pos in historial if pos.get('estado') == 'abierta' and pos.get('estrategia') == 'pump'])
                     total_ab = len([pos for pos in historial if pos.get('estado') == 'abierta'])
                     capital = obtener_capital_disponible()
-
                 if par in pares_en_uso or esta_en_blacklist(par):
                     continue
                 if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
                     break
-
                 if capital < MONTO_MIN:
                     liberado = rebalancear_si_necesario(p, tipo='pump')
                     if liberado:
@@ -672,11 +677,9 @@ def ciclo_pump_agresivo():
                         time.sleep(1)
                     else:
                         continue
-
                 monto = min(MONTO_PUMP, capital * 0.9)
                 if monto < MONTO_MIN:
                     continue
-
                 print(f"  [PUMP] ENTRANDO {par} +{p['cambio_5m']}% Vol:{p['ratio_vol']}x RSI:{p['rsi']} ${monto}")
                 with _lock:
                     exito, cantidad, precio = ejecutar_compra(par, monto, {'rsi': p['rsi']})
@@ -697,7 +700,6 @@ def ciclo_pump_agresivo():
                             f"💰 ${monto} | TP:{TAKE_PROFIT_PUMP*100}% SL:{STOP_LOSS_PUMP*100}%"
                         )
                         threading.Thread(target=vigilar_posicion_pump, args=(par, precio, cantidad, monto), daemon=True).start()
-
         except Exception as e:
             print(f"  [PUMP THREAD] Error: {e}")
         time.sleep(CICLO_PUMP_SEGUNDOS)
@@ -705,6 +707,7 @@ def ciclo_pump_agresivo():
 # ============================================================
 # REVISAR POSICIONES SCALP
 # ============================================================
+
 def revisar_posiciones(tp_actual, sl_actual):
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') != 'pump']
@@ -804,37 +807,29 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
 # ============================================================
 # MAIN
 # ============================================================
+
 def main():
     global MONITOR_CICLO
     _, tp_actual, sl_actual = obtener_modo_horario()
-
     print("="*60)
     print(f"  BOT v5 24/7 — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
     print("="*60)
     mostrar_resumen()
     print("="*60)
-
     enviar_reporte_diario()
-
     with _lock:
         revisar_posiciones(tp_actual, sl_actual)
-
-    revisar_cut_loss()
-
+        revisar_cut_loss()
     historial = cargar_historial()
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
-
     if posiciones_abiertas >= MAX_POSICIONES:
         print(f"\nMaximo posiciones ({posiciones_abiertas}/{MAX_POSICIONES})")
         return
-
     capital_disponible = obtener_capital_disponible()
     print(f"\nCapital: ${capital_disponible:.2f} USDT")
-
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
         return
-
     pares_en_uso = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
     # MONITOR AMPLIO cada 5 ciclos (~7.5 minutos)
@@ -971,12 +966,11 @@ if __name__ == "__main__":
         "🔄 Loop principal: ciclo 90s\n"
         "✂️ Cut loss: -0.3% por 5min\n"
         "🔄 Rebalanceo dinámico activo\n"
-        "📊 Scalping + Monitor + Listings 24/7"
+        "📊 Scalping + Monitor + Listings 24/7\n"
+        "🤖 IA: Gemini 2.0 Flash (1M tokens/día)"
     )
-
     threading.Thread(target=ciclo_pump_agresivo, daemon=True).start()
     print("  [PUMP THREAD] Lanzado 24/7 ✓")
-
     while True:
         try:
             main()
