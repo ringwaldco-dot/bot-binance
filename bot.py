@@ -9,7 +9,8 @@ import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from binance.client import Client
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from onchain_sentiment import get_onchain_signal, format_signal_telegram
 from market_monitor import MonitorMercado
 from listing_detector import ListingDetector
@@ -52,14 +53,7 @@ _lock = threading.Lock()
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 # Gemini 2.0 Flash — reemplaza Groq
-genai.configure(api_key=GEMINI_API_KEY)
-client_gemini = genai.GenerativeModel(
-    model_name='gemini-2.0-flash',
-    generation_config=genai.GenerationConfig(
-        temperature=0.2,
-        max_output_tokens=100,
-    )
-)
+client_gemini = genai.Client(api_key=GEMINI_API_KEY)
 
 monitor_mercado = MonitorMercado()
 listing_detector = ListingDetector()
@@ -377,7 +371,14 @@ OnChain:{oc}
 Comprá si 1+ timeframe positivo. OnChain BAJISTA: exigí señales fuertes.
 Responde SOLO JSON sin texto adicional: {{"comprar":true,"confianza":8,"razon":"1 linea"}}"""
 
-        response = client_gemini.generate_content(prompt)
+        response = client_gemini.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=100,
+            )
+        )
         texto = response.text.strip().replace('```json', '').replace('```', '').strip()
         i, f = texto.find('{'), texto.rfind('}')
         if i != -1 and f != -1:
