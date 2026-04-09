@@ -14,8 +14,9 @@ import re
 from datetime import datetime, timedelta
 from collections import defaultdict
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+import warnings
+warnings.filterwarnings("ignore")
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -26,7 +27,11 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; trading-bot/1.0)"}
 SENALES_FILE = "senales_monitor.json"
 
-client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+client_gemini = genai.GenerativeModel(
+    model_name='gemini-2.0-flash',
+    generation_config=genai.GenerationConfig(temperature=0.1, max_output_tokens=100)
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,14 +246,7 @@ Responde SOLO con JSON sin texto adicional:
             '\n'.join(['- ' + t for t in textos[:5]])
         )
 
-        response = client_gemini.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=100,
-            )
-        )
+        response = client_gemini.generate_content(prompt)
         texto = response.text.strip().replace('```json', '').replace('```', '').strip()
         inicio = texto.find('{')
         fin = texto.rfind('}')
