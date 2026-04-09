@@ -43,12 +43,24 @@ CUT_LOSS_MINUTOS = 5
 CICLO_PUMP_SEGUNDOS = 15
 CICLO_MAIN_SEGUNDOS = 90
 
+# Protección de capital
+CAPITAL_MINIMO = 20.0        # si baja de $20 → pausa total
+CAPITAL_ALERTA = 25.0        # si baja de $25 → alerta Telegram
+
+# Gestión de riesgo dinámica
+RACHA_PERDIDAS_REDUCIR = 3   # 3 pérdidas seguidas → reduce montos
+RACHA_GANANCIAS_SUBIR = 3    # 3 ganancias seguidas → sube montos
+
+# Alertas periódicas
+ALERTA_CADA_HORAS = 6        # resumen cada 6hs
+
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 REPORTE_FILE = "ultimo_reporte.json"
 RANKING_FILE = "ranking_pares.json"
 
 MONITOR_CICLO = 0
+ALERTA_CICLO = 0
 _lock = threading.Lock()
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -847,6 +859,135 @@ def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_
     return posiciones_abiertas, capital_disponible
 
 # ============================================================
+# STOP LOSS DE CAPITAL TOTAL
+# ============================================================
+
+def verificar_capital_minimo():
+    """Pausa el bot si el capital cae por debajo del mínimo."""
+    capital = obtener_capital_disponible()
+    if capital <= CAPITAL_MINIMO:
+        msg = (
+            f"🚨 <b>ALERTA CAPITAL CRÍTICO</b>\n"
+            f"💰 Capital disponible: ${capital:.2f}\n"
+            f"⛔ Bot pausado — mínimo es ${CAPITAL_MINIMO}\n"
+            f"💡 Depositá fondos para reanudar"
+        )
+        print(f"  [CAPITAL] ${capital:.2f} — por debajo del mínimo ${CAPITAL_MINIMO} — PAUSANDO")
+        enviar_telegram(msg)
+        return False
+    if capital <= CAPITAL_ALERTA:
+        print(f"  [CAPITAL] ${capital:.2f} — alerta, cerca del mínimo")
+        enviar_telegram(
+            f"⚠️ <b>Capital bajo</b>\n"
+            f"💰 ${capital:.2f} disponible (mínimo: ${CAPITAL_MINIMO})"
+        )
+    return True
+
+# ============================================================
+# GESTIÓN DE RIESGO DINÁMICA
+# ============================================================
+
+def analizar_racha(historial):
+    """Analiza las últimas operaciones y retorna factor de riesgo."""
+    cerradas = [p for p in historial if p.get('estado') in ['cerrada_ganancia', 'cerrada_perdida']]
+    if len(cerradas) < 3:
+        return 1.0, "neutral"
+    ultimas = cerradas[-RACHA_PERDIDAS_REDUCIR:]
+    todas_perdidas = all(p.get('estado') == 'cerrada_perdida' for p in ultimas)
+    todas_ganancias = all(p.get('estado') == 'cerrada_ganancia' for p in ultimas)
+    if todas_perdidas:
+        print(f"  [RACHA] {RACHA_PERDIDAS_REDUCIR} pérdidas seguidas → reduciendo montos 30%")
+        enviar_telegram(
+            f"📉 <b>Racha negativa</b>\n"
+            f"❌ {RACHA_PERDIDAS_REDUCIR} pérdidas seguidas\n"
+            f"🔽 Montos reducidos al 70%"
+        )
+        return 0.7, "negativa"
+    if todas_ganancias:
+        print(f"  [RACHA] {RACHA_GANANCIAS_SUBIR} ganancias seguidas → subiendo montos 20%")
+        return 1.2, "positiva"
+    return 1.0, "neutral"
+
+# ============================================================
+# DETECTOR DE TENDENCIA DE MERCADO
+# ============================================================
+
+def analizar_tendencia_mercado():
+    """Analiza BTC + ETH para determinar tendencia general: alcista/bajista/lateral."""
+    try:
+        scores = []
+        for par in ['BTCUSDT', 'ETHUSDT']:
+            klines = client_binance.get_klines(symbol=par, interval='1h', limit=24)
+            precios = [float(k[4]) for k in klines]
+            c1h  = ((precios[-1] - precios[-2])  / precios[-2])  * 100
+            c4h  = ((precios[-1] - precios[-5])  / precios[-5])  * 100
+            c24h = ((precios[-1] - precios[-24]) / precios[-24]) * 100
+            score = 0
+            if c1h  > 0.5:  score += 1
+            if c4h  > 1.0:  score += 1
+            if c24h > 2.0:  score += 1
+            if c1h  < -0.5: score -= 1
+            if c4h  < -1.0: score -= 1
+            if c24h < -2.0: score -= 1
+            scores.append(score)
+
+        total = sum(scores)
+        if total >= 3:
+            tendencia = 'alcista'
+        elif total <= -3:
+            tendencia = 'bajista'
+        else:
+            tendencia = 'lateral'
+
+        print(f"  [TENDENCIA] Mercado {tendencia} (score:{total})")
+        return tendencia, total
+    except Exception as e:
+        print(f"  [TENDENCIA] Error: {e}")
+        return 'lateral', 0
+
+# ============================================================
+# ALERTAS PERIÓDICAS
+# ============================================================
+
+def enviar_alerta_periodica():
+    """Resumen del estado del bot cada 6hs."""
+    global ALERTA_CICLO
+    ciclos_por_hora = 3600 / CICLO_MAIN_SEGUNDOS  # ciclos en 1 hora
+    ciclos_necesarios = int(ALERTA_CADA_HORAS * ciclos_por_hora)
+    ALERTA_CICLO += 1
+    if ALERTA_CICLO < ciclos_necesarios:
+        return
+    ALERTA_CICLO = 0
+    try:
+        historial = cargar_historial()
+        capital = obtener_capital_disponible()
+        abiertas = [p for p in historial if p.get('estado') == 'abierta']
+        cerradas_g = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
+        cerradas_p = [p for p in historial if p.get('estado') == 'cerrada_perdida']
+        neto = sum(p.get('ganancia_pct', 0) for p in cerradas_g + cerradas_p)
+        tendencia, _ = analizar_tendencia_mercado()
+        emojis_tend = {'alcista': '📈', 'bajista': '📉', 'lateral': '➡️'}
+
+        pos_str = ""
+        for p in abiertas:
+            precio_actual = obtener_precio(p['par'])
+            if precio_actual:
+                pct = ((precio_actual - float(p['precio_compra'])) / float(p['precio_compra'])) * 100
+                pos_str += f"\n  • {p['par']} {pct:+.2f}%"
+
+        enviar_telegram(
+            f"🕐 <b>Resumen {ALERTA_CADA_HORAS}hs</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Capital: ${capital:.2f} USDT\n"
+            f"📊 Ops: ✅{len(cerradas_g)} 🔴{len(cerradas_p)} | Neto: {neto:+.2f}%\n"
+            f"{emojis_tend[tendencia]} Mercado: {tendencia}\n"
+            f"📂 Abiertas ({len(abiertas)}):{pos_str if pos_str else ' ninguna'}\n"
+            f"🚫 Blacklist: {len(cargar_blacklist())}"
+        )
+    except Exception as e:
+        print(f"  Error alerta periódica: {e}")
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -859,6 +1000,12 @@ def main():
     mostrar_resumen()
     print("="*60)
     enviar_reporte_diario()
+    enviar_alerta_periodica()
+
+    # Stop loss de capital total
+    if not verificar_capital_minimo():
+        return
+
     with _lock:
         revisar_posiciones(tp_actual, sl_actual)
         revisar_cut_loss()
@@ -869,6 +1016,16 @@ def main():
         return
     capital_disponible = obtener_capital_disponible()
     print(f"\nCapital: ${capital_disponible:.2f} USDT")
+
+    # Tendencia de mercado
+    tendencia, score_tend = analizar_tendencia_mercado()
+
+    # Gestión de riesgo dinámica
+    factor_riesgo, racha = analizar_racha(historial)
+    if racha == 'negativa' and tendencia == 'bajista':
+        print("  [RIESGO] Racha negativa + mercado bajista → ciclo pausado")
+        enviar_telegram("⛔ <b>Ciclo pausado</b>\nRacha negativa + mercado bajista")
+        return
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
         return
@@ -978,6 +1135,9 @@ def main():
                     continue
             monto = calcular_monto_diversificado(historial, capital_disponible)
             if monto == 0:
+                continue
+            monto = round(monto * factor_riesgo, 2)  # ajuste por racha
+            if monto < MONTO_MIN:
                 continue
             if sig['action'] == 'SLIGHT_SHORT':
                 monto = round(monto * 0.7, 2)
