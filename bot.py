@@ -29,14 +29,14 @@ CAPITAL_TOTAL = 30.0
 MAX_POSICIONES = 3
 MAX_POSICIONES_PUMP = 2
 MONTO_BASE = CAPITAL_TOTAL / MAX_POSICIONES
-MONTO_MIN = 5.0
+MONTO_MIN = 8.0
 MONTO_MAX = 20.0
-MONTO_PUMP = 7.0
+MONTO_PUMP = 8.0
 TAKE_PROFIT = 0.012
 TAKE_PROFIT_PUMP = 0.015
 STOP_LOSS = 0.008
 STOP_LOSS_PUMP = 0.006
-TRAILING_STOP = 0.005
+TRAILING_STOP = 0.004  # base, se ajusta dinámicamente por tramos
 CRASH_THRESHOLD = -8.0
 CUT_LOSS_UMBRAL = -0.003
 CUT_LOSS_MINUTOS = 5
@@ -410,6 +410,28 @@ def filtrar_candidatos(pares_tickers):
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:20]
 
+def trailing_dinamico(ganancia_pct):
+    """Trailing stop dinámico por tramos — deja correr más las ganancias grandes."""
+    if ganancia_pct >= 3.0:
+        return 0.015   # ganó +3% → aguanta 1.5% de caída
+    elif ganancia_pct >= 1.0:
+        return 0.008   # ganó 1-3% → aguanta 0.8% de caída
+    else:
+        return 0.004   # ganó 0-1% → vende rápido con 0.4% de caída
+
+def verificar_notional(par, cantidad, precio_actual):
+    """Verifica si la venta cumple el notional mínimo de Binance."""
+    try:
+        info = client_binance.get_symbol_info(par)
+        for f in info['filters']:
+            if f['filterType'] == 'NOTIONAL':
+                min_notional = float(f.get('minNotional', 0))
+                valor = cantidad * precio_actual
+                return valor >= min_notional, valor, min_notional
+        return True, cantidad * precio_actual, 0
+    except:
+        return True, cantidad * precio_actual, 0
+
 def ejecutar_compra(par, monto, datos):
     try:
         orden = client_binance.order_market_buy(symbol=par, quoteOrderQty=monto)
@@ -425,6 +447,11 @@ def ejecutar_compra(par, monto, datos):
 
 def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     try:
+        # Verificar notional mínimo antes de intentar vender
+        cumple, valor, min_notional = verificar_notional(par, cantidad, precio_actual)
+        if not cumple:
+            print(f"  [NOTIONAL] {par} valor ${valor:.2f} < mínimo ${min_notional:.2f} — esperando que suba")
+            return False
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
         dec = len(step.rstrip('0').split('.')[-1]) if '.' in step else 0
@@ -613,7 +640,8 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        if cambio >= TAKE_PROFIT and caida >= TRAILING_STOP:
+        trail = trailing_dinamico(pct)
+        if cambio >= TAKE_PROFIT and caida >= trail:
             print(f"  [WATCH] TRAILING {par} +{pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing')
@@ -728,8 +756,9 @@ def revisar_posiciones(tp_actual, sl_actual):
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}%")
-        if cambio >= tp_actual and caida >= TRAILING_STOP:
+        trail = trailing_dinamico(pct)  # trailing dinámico según ganancia acumulada
+        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}%")
+        if cambio >= tp_actual and caida >= trail:
             if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
                 historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
