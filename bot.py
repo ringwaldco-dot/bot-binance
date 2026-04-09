@@ -51,8 +51,10 @@ CAPITAL_ALERTA = 25.0        # si baja de $25 → alerta Telegram
 RACHA_PERDIDAS_REDUCIR = 3   # 3 pérdidas seguidas → reduce montos
 RACHA_GANANCIAS_SUBIR = 3    # 3 ganancias seguidas → sube montos
 
-# Alertas periódicas
-ALERTA_CADA_HORAS = 6        # resumen cada 6hs
+# Posiciones estancadas
+HORAS_ESTANCADO = 4          # horas sin movimiento antes de liberar
+UMBRAL_ESTANCADO_MAX = 0.5   # máximo +0.5% para considerar estancada
+UMBRAL_ESTANCADO_MIN = -1.0  # mínimo -1.0% para considerar estancada
 
 HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
@@ -490,6 +492,49 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     except Exception as e:
         print(f"  Error vendiendo: {e}")
         return False
+
+# ============================================================
+# POSICIONES ESTANCADAS
+# ============================================================
+
+def revisar_posiciones_estancadas():
+    """Vende posiciones que llevan más de X horas sin moverse cerca del 0%."""
+    with _lock:
+        historial = cargar_historial()
+        cambios = False
+        ahora = datetime.now()
+        for i, pos in enumerate(historial):
+            if pos.get('estado') != 'abierta':
+                continue
+            try:
+                fecha_compra = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+                horas = (ahora - fecha_compra).total_seconds() / 3600
+            except:
+                continue
+            if horas < HORAS_ESTANCADO:
+                continue
+            precio_actual = obtener_precio(pos['par'])
+            if not precio_actual:
+                continue
+            pct = ((precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])) * 100
+            if UMBRAL_ESTANCADO_MIN <= pct <= UMBRAL_ESTANCADO_MAX:
+                print(f"  [ESTANCADO] {pos['par']} {pct:+.2f}% — {horas:.1f}hs sin moverse → vendiendo")
+                if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, round(pct, 3), 'ganancia' if pct >= 0 else 'perdida'):
+                    historial[i].update({
+                        'estado': 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida',
+                        'precio_venta': precio_actual,
+                        'ganancia_pct': round(pct, 3),
+                        'razon_cierre': f'estancado_{horas:.0f}hs',
+                        'fecha_cierre': ahora.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    cambios = True
+                    enviar_telegram(
+                        f"⏱️ <b>POSICIÓN LIBERADA</b> {pos['par']}\n"
+                        f"📊 {pct:+.2f}% en {horas:.0f}hs sin movimiento\n"
+                        f"💡 Capital liberado para nueva oportunidad"
+                    )
+        if cambios:
+            guardar_historial(historial)
 
 # ============================================================
 # CUT LOSS AGRESIVO
@@ -1019,6 +1064,7 @@ def main():
     with _lock:
         revisar_posiciones(tp_actual, sl_actual)
         revisar_cut_loss()
+        revisar_posiciones_estancadas()
     historial = cargar_historial()
     posiciones_abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
     if posiciones_abiertas >= MAX_POSICIONES:
