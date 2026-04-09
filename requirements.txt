@@ -1,5 +1,5 @@
 python-binance==1.0.36
-google-genai
+google-generativeai
 python-dotenv
 numpy
 requests
