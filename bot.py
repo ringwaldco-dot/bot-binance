@@ -575,7 +575,7 @@ def elegir_sacrificable():
     return candidatos[0]
 
 def rebalancear(oportunidad):
-    """Vende la peor posición para entrar en una mejor oportunidad."""
+    """Vende la peor posición SOLO si lleva más de 30min en pérdida > 2%."""
     cap = capital_usdt()
     if cap >= MONTO_MIN:
         return cap
@@ -588,6 +588,19 @@ def rebalancear(oportunidad):
     pct = sacrificable['pct']
     p_actual = sacrificable['precio_actual']
     opp = oportunidad.get('par', '?')
+
+    # Solo sacrificar si está en pérdida real > 1.5% O lleva más de 45 min estancada
+    try:
+        historial = cargar_historial()
+        pos = next((p for p in historial if p.get('par') == par and p.get('estado') == 'abierta'), None)
+        if pos:
+            fecha = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+            minutos = (datetime.now() - fecha).total_seconds() / 60
+            if pct > -1.5 and minutos < 45:
+                print(f"  [REBALANCEO] {par} no sacrificable — {pct:+.2f}% en {minutos:.0f}min (esperando más tiempo o más pérdida)")
+                return cap
+    except:
+        pass
 
     print(f"  [REBALANCEO] Vendiendo {par} ({pct:+.2f}%) → {opp}")
     res = vender(par, sacrificable['cantidad'], pct, f"rebalanceo→{opp}")
