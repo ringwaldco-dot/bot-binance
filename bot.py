@@ -129,12 +129,25 @@ def procesar_comandos():
                 guardar_historial([])
                 tg("✅ Historial reseteado — bot arranca limpio")
 
+            elif texto == '/ranking':
+                ranking = cargar_ranking()
+                if not ranking:
+                    tg("📊 Sin historial todavía")
+                else:
+                    top = sorted(ranking.items(), key=lambda x: x[1].get('score', 50), reverse=True)[:10]
+                    msg = "🏆 <b>Ranking de pares</b>\n"
+                    for par, d in top:
+                        emoji = "✅" if d.get('score', 50) > 60 else "⚠️" if d.get('score', 50) > 40 else "🔴"
+                        msg += f"{emoji} {par}: {d.get('score',50)}/100 | {d.get('ops',0)} ops | {d.get('pct_total',0):+.2f}%\n"
+                    tg(msg)
+
             elif texto == '/ayuda':
                 tg(
                     "🤖 <b>Comandos disponibles:</b>\n"
                     "/estado — ver capital y posiciones\n"
                     "/vender_todo — vender todas las posiciones\n"
                     "/reset_historial — limpiar historial\n"
+                    "/ranking — ver ranking de pares\n"
                     "/ayuda — ver esta lista"
                 )
     except Exception as e:
@@ -632,16 +645,30 @@ def detectar_pumps():
                         print(f"  [OB] {par} descartado — presión vendedora ({ob_score:.2f})")
                         continue
 
+                    # Consultar memoria — score del par basado en historial
+                    ranking = cargar_ranking()
+                    datos_par = ranking.get(par, {})
+                    score = datos_par.get('score', 50)
+                    ops = datos_par.get('ops', 0)
+                    pct_total = datos_par.get('pct_total', 0)
+
+                    # Descartar pares con mal historial (score < 30 con más de 2 ops)
+                    if ops >= 2 and score < 30:
+                        print(f"  [MEM] {par} descartado — mal historial (score:{score} ops:{ops})")
+                        continue
+
                     pumps.append({
                         'par': par, 'c2m': round(c2m, 3), 'c5m': round(c5m, 3),
                         'c15m': round(c15m, 3), 'ratio_vol': round(ratio_vol, 2),
-                        'rsi': round(rsi, 1), 'ob_score': ob_score
+                        'rsi': round(rsi, 1), 'ob_score': ob_score,
+                        'score': score, 'ops': ops, 'pct_total': pct_total
                     })
             except:
                 continue
             time.sleep(0.03)
 
-        pumps.sort(key=lambda x: x['ratio_vol'] * (1 + x['c5m'] / 10), reverse=True)
+        # Ordenar por: ratio_vol * momentum * bonus_historial
+        pumps.sort(key=lambda x: x['ratio_vol'] * (1 + x['c5m'] / 10) * (1 + x['score'] / 100), reverse=True)
         return pumps[:5]
     except Exception as e:
         print(f"  Error detectar_pumps: {e}")
@@ -705,7 +732,7 @@ def thread_pumps():
             if mejor['c5m'] < 0.3:
                 time.sleep(CICLO_PUMP)
                 continue
-            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f}")
+            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f} | Score:{mejor.get('score',50)}/100 ({mejor.get('ops',0)} ops)")
 
             # Obtener capital — rebalancear si es necesario
             cap = capital_usdt()
