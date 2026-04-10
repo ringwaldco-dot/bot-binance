@@ -397,7 +397,10 @@ Responde SOLO JSON sin texto adicional: {{"comprar":true,"confianza":8,"razon":"
         texto = response.text.strip().replace('```json', '').replace('```', '').strip()
         i, f = texto.find('{'), texto.rfind('}')
         if i != -1 and f != -1:
-            return json.loads(texto[i:f+1])
+            resultado = json.loads(texto[i:f+1])
+            print(f"  Gemini: comprar={resultado.get('comprar')} confianza={resultado.get('confianza')}/10")
+            return resultado
+        print(f"  Gemini respuesta inválida: {texto[:100]}")
     except Exception as e:
         print(f"  Error Gemini: {e}")
     return None
@@ -1174,7 +1177,8 @@ def main():
     capital_tmp = obtener_capital_disponible()
     ab_tmp = [p for p in historial_tmp if p.get('estado') == 'abierta']
     print(f"  Capital:${capital_tmp:.2f} | Abiertas:{len(ab_tmp)}")
-    enviar_telegram(f"🔄 <b>Ciclo bot</b>\n💰 Capital libre: ${capital_tmp:.2f} USDT\n📂 Posiciones abiertas: {len(ab_tmp)}")
+    # Solo loguear en consola, no Telegram cada ciclo
+    print(f"  💰 Capital: ${capital_tmp:.2f} | Abiertas: {len(ab_tmp)}")
     print("="*60)
     mostrar_resumen()
     print("="*60)
@@ -1339,7 +1343,7 @@ if __name__ == "__main__":
         "🌍 Sin restricciones horarias\n"
         "🚀 Pump thread: ciclo 15s\n"
         "🔄 Loop principal: ciclo 90s\n"
-        "✂️ Cut loss: -0.3% por 5min\n"
+        "✂️ Cut loss: -0.2% por 2min\n"
         "🔄 Rebalanceo dinámico activo\n"
         "📊 Scalping + Monitor + Listings 24/7\n"
         "🤖 IA: Gemini 2.0 Flash (1M tokens/día)"
