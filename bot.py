@@ -657,26 +657,71 @@ def revisar_cut_loss():
 # ============================================================
 
 def elegir_posicion_sacrificable():
+    """Elige la posición con menos futuro para sacrificar en favor de un pump."""
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta']
     if not posiciones:
         return None
-    peor, peor_cambio = None, float('inf')
+
+    candidatos = []
+    ahora = datetime.now()
+
     for pos in posiciones:
         precio_actual = obtener_precio(pos['par'])
         if not precio_actual:
             continue
+
         cambio = (precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])
-        if cambio < peor_cambio:
-            peor_cambio = cambio
-            peor = {'par': pos['par'], 'cantidad': pos.get('cantidad', 0),
-                    'precio_actual': precio_actual, 'cambio_pct': round(cambio * 100, 3)}
-    return peor
+        pct = round(cambio * 100, 3)
+
+        # Calcular minutos en posición
+        try:
+            fecha_compra = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+            minutos = (ahora - fecha_compra).total_seconds() / 60
+        except:
+            minutos = 0
+
+        # Calcular volumen actual del par (indica si tiene vida)
+        try:
+            ticker = client_binance.get_ticker(symbol=pos['par'])
+            vol_24h = float(ticker['quoteVolume'])
+        except:
+            vol_24h = 0
+
+        # Score de sacrificio — mayor score = más candidato a ser vendido
+        # Factores: pérdida (malo), tiempo sin moverse (malo), bajo volumen (malo)
+        score = 0
+        if pct < 0:
+            score += abs(pct) * 10      # pérdida → malo
+        if minutos > 30 and abs(pct) < 0.5:
+            score += minutos / 10       # mucho tiempo sin moverse → malo
+        if vol_24h < 1000000:
+            score += 20                 # bajo volumen → malo
+
+        candidatos.append({
+            'par': pos['par'],
+            'cantidad': pos.get('cantidad', 0),
+            'precio_actual': precio_actual,
+            'cambio_pct': pct,
+            'minutos': round(minutos),
+            'vol_24h': vol_24h,
+            'score': round(score, 2)
+        })
+
+    if not candidatos:
+        return None
+
+    # Ordenar por score descendente — el peor primero
+    candidatos.sort(key=lambda x: x['score'], reverse=True)
+    elegido = candidatos[0]
+    print(f"  [REBALANCEO] Candidatos: {[(c['par'], c['score']) for c in candidatos]}")
+    print(f"  [REBALANCEO] Elegido para sacrificar: {elegido['par']} (score:{elegido['score']} | {elegido['cambio_pct']:+.2f}% | {elegido['minutos']}min)")
+    return elegido
 
 def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
     if obtener_capital_disponible() >= MONTO_MIN:
         return 0
-    if tipo == 'pump' and oportunidad.get('ratio_vol', 0) < 2.0:
+    if tipo == 'pump' and oportunidad.get('ratio_vol', 0) < 1.5:  # antes 2.0
         return 0
     if tipo == 'scalp' and confianza < 7:
         return 0
