@@ -34,7 +34,7 @@ MONTO_MIN        = 6.0      # mínimo para operar
 MAX_POSICIONES   = 4        # máximo posiciones simultáneas
 STOP_LOSS        = 0.025    # -2.5% stop loss
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
-MIN_GANANCIA_TRAIL = 0.001  # activar trailing con +0.1%
+MIN_GANANCIA_TRAIL = 0.005  # activar trailing con +0.5% (cubre fees)
 MINUTOS_ESTANCADO = 30      # minutos sin moverse para liberar
 RANGO_ESTANCADO  = 0.008    # ±0.8% para considerar estancada
 CICLO_PUMP       = 15       # segundos entre scans de pump
@@ -232,8 +232,9 @@ def trailing(pct_ganancia, minutos):
     """Trailing inteligente — más amplio cuando más sube y más tiempo lleva."""
     if minutos < 10:
         # Primeros 10 min — ajustado
+        if pct_ganancia >= 2.0: return 0.010
         if pct_ganancia >= 1.0: return 0.008
-        return 0.004
+        return 0.005
     else:
         # Después de 10 min — deja correr
         if pct_ganancia >= 5.0: return 0.025
@@ -345,8 +346,8 @@ def revisar_posiciones():
                 cambios = True
                 continue
 
-        # 3. Posición estancada
-        if minutos >= MINUTOS_ESTANCADO and abs(pct) <= RANGO_ESTANCADO * 100:
+        # 3. Posición estancada — solo vender si perdiendo o ganancia > 0.3%
+        if minutos >= MINUTOS_ESTANCADO and abs(pct) <= RANGO_ESTANCADO * 100 and pct < 0.3:
             res = vender(pos['par'], pos.get('cantidad', 0), pct, f"estancada_{minutos:.0f}min")
             if res:
                 estado = 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida'
@@ -459,7 +460,8 @@ def detectar_pumps():
                 if t['symbol'].endswith('USDT')
                 and float(t['quoteVolume']) > 300000
                 and float(t['lastPrice']) > 0.000001
-                and not en_blacklist(t['symbol'])]
+                and not en_blacklist(t['symbol'])
+                and t['symbol'] != 'TOMOUSDT']  # datos congelados, ignorar
         usdt.sort(key=lambda x: float(x['priceChangePercent']), reverse=True)
 
         pumps = []
@@ -680,7 +682,8 @@ def scalp_candidatos(historial, cap):
                       and float(t['quoteVolume']) > 500000
                       and -8 <= float(t['priceChangePercent']) <= 5
                       and t['symbol'] not in pares_activos
-                      and not en_blacklist(t['symbol'])]
+                      and not en_blacklist(t['symbol'])
+                and t['symbol'] != 'TOMOUSDT']  # datos congelados, ignorar
         candidatos.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
         candidatos = candidatos[:30]
     except:
