@@ -843,6 +843,15 @@ def ciclo_pump_agresivo():
                 time.sleep(CICLO_PUMP_SEGUNDOS)
                 continue
             print(f"\n  [PUMP] {len(pumps)} candidatos — {datetime.utcnow().strftime('%H:%M:%S')} UTC")
+            # Log detallado del mejor candidato
+            if pumps:
+                mejor = pumps[0]
+                enviar_telegram(
+                    f"🔍 <b>Pump detectado</b>\n"
+                    f"Par: {mejor['par']}\n"
+                    f"2m:{mejor.get('cambio_2m',0):+.2f}% 5m:{mejor['cambio_5m']:+.2f}% Vol:{mejor['ratio_vol']}x RSI:{mejor['rsi']}\n"
+                    f"Capital: ${capital:.2f} | Min: ${MONTO_MIN}"
+                )
             for p in pumps:
                 par = p['par']
                 with _lock:
