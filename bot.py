@@ -853,10 +853,10 @@ def detectar_pumps():
                 rsi = calcular_rsi(precios)
 
                 es_pump = (
-                    (c5m >= 1.0 and ratio_vol >= 5.0) or   # subida 1%+ con vol 5x
-                    (c5m >= 2.0 and ratio_vol >= 3.0) or   # subida 2%+ con vol 3x
-                    (c15m >= 4.0 and ratio_vol >= 2.0)     # subida 4%+ en 15m
-                ) and 40 <= rsi <= 68  # RSI sano, no sobrecomprado ni sobrevendido
+                    (c5m >= 0.5 and ratio_vol >= 6.0) or   # entrada temprana: 0.5% con vol 6x
+                    (c5m >= 1.0 and ratio_vol >= 4.0) or   # subida 1%+ con vol 4x
+                    (c15m >= 3.0 and ratio_vol >= 2.5)     # subida 3%+ en 15m
+                ) and 35 <= rsi <= 65  # RSI sano
 
                 if es_pump:
                     # Verificar order book — solo entrar si hay presión compradora
