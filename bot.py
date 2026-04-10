@@ -4,6 +4,7 @@ import os
 import json
 import time
 import threading
+import math
 import numpy as np
 import requests
 from datetime import datetime, timedelta
@@ -485,7 +486,7 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
         try:
             balances = client_binance.get_account()['balances']
             b = next((x for x in balances if x['asset'] == asset), None)
-            balance_real = float(b['free']) + float(b['locked']) if b else 0
+            balance_real = float(b['free']) if b else 0  # solo free, no locked
         except:
             balance_real = 0
 
@@ -496,7 +497,9 @@ def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
             print(f"  [VENTA] {par} balance real 0 — marcando cerrada")
             return 'sin_balance'
 
-        cantidad_venta = round(balance_real, dec)
+        # Usar floor para no exceder el balance disponible
+        factor = 10 ** dec
+        cantidad_venta = math.floor(balance_real * factor) / factor
         if cantidad_venta <= 0:
             print(f"  [VENTA] {par} cantidad redondeada 0")
             return 'sin_balance'
@@ -895,7 +898,7 @@ def obtener_balance_asset(asset):
         balances = client_binance.get_account()['balances']
         for b in balances:
             if b['asset'] == asset:
-                return float(b['free']) + float(b['locked'])
+                return float(b['free'])  # solo free
         return 0
     except:
         return 0
