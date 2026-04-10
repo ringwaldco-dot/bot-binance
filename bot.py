@@ -654,6 +654,78 @@ def iniciar_dashboard():
         print(f"Dashboard error: {e}")
 
 # ============================================================
+# SCALPING
+# ============================================================
+
+def calcular_macd(precios):
+    if len(precios) < 26:
+        return 0, 0
+    ema12 = calcular_ema(precios, 12)
+    ema26 = calcular_ema(precios, 26)
+    macd = ema12 - ema26
+    signal = calcular_ema([macd] * 9, 9)
+    return macd, signal
+
+def scalp_candidatos(historial, cap):
+    """Busca candidatos de scalping con RSI + MACD."""
+    pares_activos = {p['par'] for p in historial if p.get('estado') == 'abierta'}
+    try:
+        tickers = client_binance.get_ticker()
+        candidatos = [t for t in tickers
+                      if t['symbol'].endswith('USDT')
+                      and float(t['quoteVolume']) > 500000
+                      and -8 <= float(t['priceChangePercent']) <= 5
+                      and t['symbol'] not in pares_activos
+                      and not en_blacklist(t['symbol'])]
+        candidatos.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
+        candidatos = candidatos[:30]
+    except:
+        return
+
+    print(f"\n  Scalping: {len(candidatos)} candidatos")
+    for t in candidatos:
+        if len([p for p in cargar_historial() if p.get('estado') == 'abierta']) >= MAX_POSICIONES:
+            break
+        par = t['symbol']
+        try:
+            klines5 = client_binance.get_klines(symbol=par, interval='5m', limit=50)
+            precios5 = [float(k[4]) for k in klines5]
+            rsi = calcular_rsi(precios5)
+            macd, signal = calcular_macd(precios5)
+            cambio_24h = float(t['priceChangePercent'])
+
+            # Condiciones de entrada: RSI bajo + MACD alcista
+            if rsi > 45 or macd <= signal:
+                continue
+
+            print(f"  {par} RSI:{rsi:.1f} MACD:{'▲' if macd>signal else '▼'} 24h:{cambio_24h:.1f}%")
+
+            # Confirmar con Gemini
+            analisis = analizar_gemini(par, cambio_24h, rsi, cambio_24h)
+            if not analisis or not analisis.get('comprar') or analisis.get('confianza', 0) < 6:
+                continue
+
+            monto = min(MONTO_POR_TRADE, cap * 0.95)
+            if monto < MONTO_MIN:
+                break
+
+            exito, cantidad, precio_c = comprar(par, monto)
+            if exito:
+                h = cargar_historial()
+                h.append({
+                    'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                    'cantidad': cantidad, 'monto': monto,
+                    'estado': 'abierta', 'estrategia': 'scalp',
+                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                guardar_historial(h)
+                cap -= monto
+                tg(f"📈 <b>SCALP</b> {par}\nRSI:{rsi:.1f} | Gemini:{analisis.get('confianza')}/10\n💰 ${monto:.2f}")
+            time.sleep(0.3)
+        except:
+            continue
+
+# ============================================================
 # LOOP PRINCIPAL
 # ============================================================
 
@@ -678,11 +750,19 @@ def main():
     # Revisar posiciones
     revisar_posiciones()
 
+    # SCALPING — buscar oportunidades cada ciclo
+    if len(abiertas) < MAX_POSICIONES and cap >= MONTO_MIN:
+        try:
+            scalp_candidatos(historial, cap)
+        except Exception as e:
+            print(f"  Error scalping: {e}")
+
 if __name__ == "__main__":
     tg(
         "🤖 <b>Bot Binance v6</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🚀 Pump detector: ciclo 15s\n"
+        "📈 Scalping: ciclo 90s\n"
         "🔄 Loop principal: ciclo 90s\n"
         "📊 Trailing inteligente activo\n"
         "🔄 Rebalanceo automático\n"
