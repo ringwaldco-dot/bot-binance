@@ -882,6 +882,17 @@ def ciclo_pump_agresivo():
 # REVISAR POSICIONES SCALP
 # ============================================================
 
+def obtener_balance_asset(asset):
+    """Obtiene el balance real de un asset en Binance."""
+    try:
+        balances = client_binance.get_account()['balances']
+        for b in balances:
+            if b['asset'] == asset:
+                return float(b['free']) + float(b['locked'])
+        return 0
+    except:
+        return 0
+
 def revisar_posiciones(tp_actual, sl_actual):
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta' and p.get('estrategia') != 'pump']
@@ -896,6 +907,13 @@ def revisar_posiciones(tp_actual, sl_actual):
         if not precio_actual:
             continue
         precio_compra = float(pos['precio_compra'])
+
+        # Leer balance real de Binance en lugar de confiar en el historial
+        asset = pos['par'].replace('USDT', '')
+        cantidad_real = obtener_balance_asset(asset)
+        if cantidad_real > 0:
+            historial[i]['cantidad'] = cantidad_real  # actualizar historial
+
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
         precio_maximo = float(pos.get('precio_maximo', precio_compra))
@@ -903,20 +921,21 @@ def revisar_posiciones(tp_actual, sl_actual):
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        trail = trailing_dinamico(pct)  # trailing dinámico según ganancia acumulada
-        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}%")
+        trail = trailing_dinamico(pct)
+        cantidad_usar = cantidad_real if cantidad_real > 0 else pos.get('cantidad', 0)
+        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}% | qty:{cantidad_usar}")
         if cambio >= tp_actual and caida >= trail:
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'trailing'):
+            if ejecutar_venta(pos['par'], cantidad_usar, precio_actual, pct, 'trailing'):
                 historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
         elif cambio >= tp_actual:
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'ganancia'):
+            if ejecutar_venta(pos['par'], cantidad_usar, precio_actual, pct, 'ganancia'):
                 historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
         elif cambio <= -sl_actual:
-            if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
+            if ejecutar_venta(pos['par'], cantidad_usar, precio_actual, pct, 'perdida'):
                 historial[i].update({'estado': 'cerrada_perdida', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
