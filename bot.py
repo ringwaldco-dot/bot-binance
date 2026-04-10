@@ -65,6 +65,7 @@ RANKING_FILE = "ranking_pares.json"
 
 MONITOR_CICLO = 0
 ALERTA_CICLO = 0
+_RESUMEN_CICLO = 0
 _lock = threading.Lock()
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -956,14 +957,18 @@ def revisar_posiciones(tp_actual, sl_actual):
 
 def mostrar_resumen():
     historial = cargar_historial()
-    if not historial:
-        return
+    capital = obtener_capital_disponible()
     g = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
     p = [p for p in historial if p.get('estado') == 'cerrada_perdida']
     ab = [p for p in historial if p.get('estado') == 'abierta']
     pumps_ab = len([x for x in ab if x.get('estrategia') == 'pump'])
     neto = sum(x.get('ganancia_pct', 0) for x in g+p)
-    print(f"  G:{len(g)} P:{len(p)} | Abiertas:{len(ab)}(pump:{pumps_ab}) | Neto:{neto:+.2f}% | BL:{len(cargar_blacklist())}")
+    resumen = f"  G:{len(g)} P:{len(p)} | Abiertas:{len(ab)}(pump:{pumps_ab}) | Neto:{neto:+.2f}% | BL:{len(cargar_blacklist())} | Capital:${capital:.2f}"
+    print(resumen)
+    # Mandar estado a Telegram cada 10 ciclos (~15 min)
+    global _RESUMEN_CICLO
+    _RESUMEN_CICLO = getattr(_RESUMEN_CICLO if '_RESUMEN_CICLO' in dir() else type('', (), {'_RESUMEN_CICLO': 0})(), '_RESUMEN_CICLO', 0) + 1
+    pass
 
 def procesar_señales_monitor(señales, historial, capital_disponible, pares_en_uso, posiciones_abiertas, tp_actual, sl_actual):
     for señal in señales:
@@ -1156,6 +1161,12 @@ def main():
     _, tp_actual, sl_actual = obtener_modo_horario()
     print("="*60)
     print(f"  BOT v5 24/7 — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+    print("="*60)
+    historial_tmp = cargar_historial()
+    capital_tmp = obtener_capital_disponible()
+    ab_tmp = [p for p in historial_tmp if p.get('estado') == 'abierta']
+    print(f"  Capital:${capital_tmp:.2f} | Abiertas:{len(ab_tmp)}")
+    enviar_telegram(f"🔄 <b>Ciclo bot</b>\n💰 Capital libre: ${capital_tmp:.2f} USDT\n📂 Posiciones abiertas: {len(ab_tmp)}")
     print("="*60)
     mostrar_resumen()
     print("="*60)
