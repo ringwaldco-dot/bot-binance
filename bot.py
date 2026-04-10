@@ -171,7 +171,7 @@ def esta_en_blacklist(par):
 
 def agregar_a_blacklist(par, razon):
     blacklist = cargar_blacklist()
-    expira = (datetime.now() + timedelta(hours=24)).isoformat()
+    expira = (datetime.now() + timedelta(hours=4)).isoformat()  # 4hs, antes 24hs
     veces = blacklist.get(par, {}).get('veces', 0) + 1
     blacklist[par] = {'razon': razon, 'expira': expira, 'veces': veces}
     guardar_blacklist(blacklist)
@@ -855,7 +855,7 @@ def ciclo_pump_agresivo():
                     f"2m:{mejor.get('cambio_2m',0):+.2f}% 5m:{mejor['cambio_5m']:+.2f}% Vol:{mejor['ratio_vol']}x RSI:{mejor['rsi']}\n"
                     f"Capital: ${capital:.2f} | Min: ${MONTO_MIN}"
                 )
-            for p in pumps:
+            for idx, p in enumerate(pumps):
                 par = p['par']
                 # Leer estado sin lock para evitar deadlock
                 historial = cargar_historial()
@@ -865,7 +865,10 @@ def ciclo_pump_agresivo():
                 capital = obtener_capital_disponible()
 
                 if par in pares_en_uso or esta_en_blacklist(par):
-                    print(f"  [PUMP] {par} saltado — en uso:{par in pares_en_uso} blacklist:{esta_en_blacklist(par)}")
+                    motivo = "en uso" if par in pares_en_uso else "blacklist"
+                    print(f"  [PUMP] {par} saltado — {motivo}")
+                    if idx == 0:  # si es el mejor candidato, avisar
+                        enviar_telegram(f"⚠️ Mejor pump {par} saltado ({motivo}) — usando siguiente")
                     continue
                 if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
                     print(f"  [PUMP] max posiciones — pumps:{pumps_ab} total:{total_ab}")
