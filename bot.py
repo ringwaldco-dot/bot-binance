@@ -476,35 +476,42 @@ def ejecutar_compra(par, monto, datos):
 
 def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     try:
+        asset = par.replace('USDT', '')
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
         dec = len(step.rstrip('0').split('.')[-1]) if '.' in step else 0
 
-        # Si es pérdida o cut_loss, intentar vender el balance real completo
-        # ignorando el notional — liberar capital sí o sí
-        if tipo == 'perdida':
-            try:
-                balance_real = float([b['free'] for b in client_binance.get_account()['balances']
-                                      if b['asset'] == par.replace('USDT', '')][0])
-                cantidad_venta = round(balance_real, dec)
-            except:
-                cantidad_venta = round(cantidad, dec)
-        else:
-            # Para ganancias sí respetamos el notional
-            cumple, valor, min_notional = verificar_notional(par, cantidad, precio_actual)
-            if not cumple:
-                print(f"  [NOTIONAL] {par} valor ${valor:.2f} < mínimo ${min_notional:.2f} — esperando que suba")
-                return False
-            cantidad_venta = round(cantidad, dec)
+        # Siempre leer balance real de Binance
+        try:
+            balances = client_binance.get_account()['balances']
+            b = next((x for x in balances if x['asset'] == asset), None)
+            balance_real = float(b['free']) + float(b['locked']) if b else 0
+        except:
+            balance_real = 0
 
+        print(f"  [VENTA DEBUG] {par} tipo:{tipo} historial:{cantidad} balance_real:{balance_real:.4f} dec:{dec}")
+
+        # Si no hay balance real, marcar como cerrada
+        if balance_real <= 0:
+            print(f"  [VENTA] {par} balance real 0 — marcando cerrada")
+            return 'sin_balance'
+
+        cantidad_venta = round(balance_real, dec)
         if cantidad_venta <= 0:
-            print(f"  [VENTA] {par} cantidad 0 — nada que vender")
-            return False
+            print(f"  [VENTA] {par} cantidad redondeada 0")
+            return 'sin_balance'
+
+        # Para ganancias verificar notional, para perdidas vender sin importar
+        if tipo not in ('perdida', 'trailing'):
+            cumple, valor, min_notional = verificar_notional(par, cantidad_venta, precio_actual)
+            if not cumple:
+                print(f"  [NOTIONAL] {par} ${valor:.2f} < ${min_notional:.2f} — esperando")
+                return False
 
         orden = client_binance.order_market_sell(symbol=par, quantity=cantidad_venta)
         emojis = {'ganancia': '✅', 'pump': '🚀', 'trailing': '📉', 'perdida': '🔴'}
         nombres = {'ganancia': 'TAKE PROFIT', 'pump': 'PUMP PROFIT', 'trailing': 'TRAILING STOP', 'perdida': 'STOP LOSS'}
-        enviar_telegram(f"{emojis.get(tipo,'✅')} <b>{nombres.get(tipo,'VENTA')}</b> {par}\n{'Ganancia' if pct>0 else 'Pérdida'}: {pct:+.3f}%\n💰 ${precio_actual}")
+        enviar_telegram(f"{emojis.get(tipo,'✅')} <b>{nombres.get(tipo,'VENTA')}</b> {par}\n{'Ganancia' if pct>0 else 'Perdida'}: {pct:+.3f}%\n💰 ${precio_actual}")
         actualizar_blacklist_post_venta(par, pct)
         return True
     except Exception as e:
