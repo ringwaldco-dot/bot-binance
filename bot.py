@@ -711,9 +711,10 @@ def detectar_pumps_rapido():
         # Ampliar a todos los pares USDT con volumen mínimo $300k (antes $1M y solo top 100)
         usdt = [t for t in tickers
                 if t['symbol'].endswith('USDT')
-                and float(t['quoteVolume']) > 300000
-                and float(t['lastPrice']) > 0.000001
-                and float(t['lastPrice']) < 1000
+                and float(t['quoteVolume']) > 1000000   # volumen mínimo $1M
+                and float(t['lastPrice']) > 0.001        # precio mínimo $0.001
+                and float(t['lastPrice']) < 500          # precio máximo $500
+                and float(t['priceChangePercent']) > -15 # no en caída libre
                 and not esta_en_blacklist(t['symbol'])]
 
         # Ordenar por % de cambio en 24h descendente — los que más se mueven primero
@@ -1339,6 +1340,84 @@ def main():
     print(f"\n{'='*60}")
     print(f"  Ciclo completado — {datetime.utcnow().strftime('%H:%M:%S')} UTC")
 
+# ============================================================
+# DASHBOARD WEB — corre en el mismo proceso como thread
+# ============================================================
+
+def iniciar_dashboard():
+    try:
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+
+        def generar_html():
+            historial = cargar_historial()
+            blacklist = cargar_blacklist()
+            ranking = cargar_ranking()
+            abiertas = [p for p in historial if p.get('estado') == 'abierta']
+            ganancias = [p for p in historial if p.get('estado') == 'cerrada_ganancia']
+            perdidas = [p for p in historial if p.get('estado') == 'cerrada_perdida']
+            neto = sum(p.get('ganancia_pct', 0) for p in ganancias + perdidas)
+            capital = obtener_capital_disponible()
+
+            posiciones_html = ""
+            for pos in abiertas:
+                precio_actual = obtener_precio(pos['par']) or 0
+                precio_compra = float(pos.get('precio_compra', 0))
+                cambio = ((precio_actual - precio_compra) / precio_compra * 100) if precio_compra > 0 else 0
+                color = "#00ff88" if cambio >= 0 else "#ff4444"
+                posiciones_html += f"<tr><td>{pos['par']}</td><td>{pos.get('estrategia','scalp').upper()}</td><td>${precio_compra:.4f}</td><td>${precio_actual:.4f}</td><td style='color:{color}'>{cambio:+.3f}%</td><td>${pos.get('monto',0)}</td><td>{pos.get('fecha','')[:16]}</td></tr>"
+
+            historial_html = ""
+            for op in reversed(historial[-20:]):
+                if op.get('estado') in ['cerrada_ganancia', 'cerrada_perdida']:
+                    pct = op.get('ganancia_pct', 0)
+                    color = "#00ff88" if pct > 0 else "#ff4444"
+                    emoji = "✅" if pct > 0 else "🔴"
+                    historial_html += f"<tr><td>{emoji} {op['par']}</td><td>{op.get('estrategia','scalp').upper()}</td><td style='color:{color}'>{pct:+.3f}%</td><td>{op.get('fecha','')[:16]}</td><td>{op.get('razon','')[:40]}</td></tr>"
+
+            ranking_html = ""
+            top = sorted(ranking.items(), key=lambda x: x[1].get('score', 50), reverse=True)[:10]
+            for par, data in top:
+                score = data.get('score', 50)
+                color = "#00ff88" if score > 60 else "#ffaa00" if score > 40 else "#ff4444"
+                ranking_html += f"<tr><td>{par}</td><td style='color:{color}'>{score}/100</td><td>{data.get('ops',0)}</td><td>{data.get('ganancias',0)}</td><td>{data.get('perdidas',0)}</td><td>{data.get('pct_total',0):+.2f}%</td></tr>"
+
+            blacklist_html = "".join([f"<span style='background:#ff4444;padding:4px 8px;border-radius:4px;margin:4px'>{par}</span>" for par, data in blacklist.items() if 'expira' in data]) or "<span style='color:#555'>Sin pares baneados</span>"
+
+            neto_color = 'green' if neto >= 0 else 'red'
+            return f"""<!DOCTYPE html><html><head><title>Bot Binance Dashboard</title><meta charset="utf-8"><meta http-equiv="refresh" content="30"><style>*{{margin:0;padding:0;box-sizing:border-box}}body{{background:#0a0a0a;color:#fff;font-family:'Courier New',monospace;padding:20px}}h1{{color:#f0b90b;text-align:center;margin-bottom:20px;font-size:24px}}h2{{color:#f0b90b;margin:20px 0 10px;font-size:16px}}.stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}}.card{{background:#111;border:1px solid #333;border-radius:8px;padding:15px;text-align:center}}.card .value{{font-size:24px;font-weight:bold;margin-top:5px}}.card .label{{color:#888;font-size:12px}}.green{{color:#00ff88}}.red{{color:#ff4444}}.yellow{{color:#f0b90b}}table{{width:100%;border-collapse:collapse;background:#111;border-radius:8px;overflow:hidden}}th{{background:#222;padding:10px;text-align:left;font-size:12px;color:#888}}td{{padding:8px 10px;border-bottom:1px solid #1a1a1a;font-size:12px}}tr:hover{{background:#1a1a1a}}.section{{margin-bottom:30px}}.update{{color:#555;text-align:center;margin-top:20px;font-size:11px}}</style></head><body>
+            <h1>🤖 BOT BINANCE DASHBOARD</h1>
+            <div class="stats">
+                <div class="card"><div class="label">💰 Capital USDT</div><div class="value yellow">${capital:.2f}</div></div>
+                <div class="card"><div class="label">📈 Neto Total</div><div class="value {neto_color}">{neto:+.2f}%</div></div>
+                <div class="card"><div class="label">✅ Ganancias</div><div class="value green">{len(ganancias)} ops</div></div>
+                <div class="card"><div class="label">🔴 Pérdidas</div><div class="value red">{len(perdidas)} ops</div></div>
+            </div>
+            <div class="section"><h2>📊 POSICIONES ABIERTAS ({len(abiertas)})</h2><table><tr><th>Par</th><th>Estrategia</th><th>Compra</th><th>Actual</th><th>%</th><th>Monto</th><th>Fecha</th></tr>{posiciones_html or "<tr><td colspan='7' style='text-align:center;color:#555'>Sin posiciones</td></tr>"}</table></div>
+            <div class="section"><h2>🏆 RANKING DE PARES</h2><table><tr><th>Par</th><th>Score</th><th>Ops</th><th>Ganancias</th><th>Pérdidas</th><th>Total %</th></tr>{ranking_html or "<tr><td colspan='6' style='text-align:center;color:#555'>Sin datos</td></tr>"}</table></div>
+            <div class="section"><h2>🚫 BLACKLIST ({len(blacklist)})</h2><div style="padding:10px;background:#111;border-radius:8px">{blacklist_html}</div></div>
+            <div class="section"><h2>📋 ÚLTIMAS 20 OPERACIONES</h2><table><tr><th>Par</th><th>Estrategia</th><th>Resultado</th><th>Fecha</th><th>Razón</th></tr>{historial_html or "<tr><td colspan='5' style='text-align:center;color:#555'>Sin operaciones</td></tr>"}</table></div>
+            <div class="update">Auto-refresh 30s | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+            </body></html>"""
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                try:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(generar_html().encode('utf-8'))
+                except Exception as e:
+                    print(f"Dashboard error: {e}")
+            def log_message(self, format, *args):
+                pass
+
+        port = int(os.environ.get('PORT', 8080))
+        server = HTTPServer(('0.0.0.0', port), Handler)
+        print(f"  [DASHBOARD] Corriendo en puerto {port} ✓")
+        server.serve_forever()
+    except Exception as e:
+        print(f"  [DASHBOARD] Error: {e}")
+
 if __name__ == "__main__":
     enviar_telegram(
         "🤖 <b>Bot Binance v5 — 24/7 GLOBAL</b>\n"
@@ -1351,6 +1430,7 @@ if __name__ == "__main__":
         "📊 Scalping + Monitor + Listings 24/7\n"
         "🤖 IA: Gemini 2.0 Flash (1M tokens/día)"
     )
+    threading.Thread(target=iniciar_dashboard, daemon=True).start()
     threading.Thread(target=ciclo_pump_agresivo, daemon=True).start()
     print("  [PUMP THREAD] Lanzado 24/7 ✓")
     while True:
