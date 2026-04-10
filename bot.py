@@ -45,8 +45,8 @@ CICLO_PUMP_SEGUNDOS = 15
 CICLO_MAIN_SEGUNDOS = 90
 
 # Protección de capital
-CAPITAL_MINIMO = 20.0        # si baja de $20 → pausa total
-CAPITAL_ALERTA = 25.0        # si baja de $25 → alerta Telegram
+CAPITAL_MINIMO = 5.0         # si baja de $5 → pausa total (sin posiciones abiertas)
+CAPITAL_ALERTA = 10.0        # si baja de $10 → alerta Telegram
 
 # Gestión de riesgo dinámica
 RACHA_PERDIDAS_REDUCIR = 3   # 3 pérdidas seguidas → reduce montos
