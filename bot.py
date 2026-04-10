@@ -31,13 +31,13 @@ GEMINI_API_KEY   = os.getenv('GEMINI_API_KEY')
 TELEGRAM_TOKEN   = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
 TELEGRAM_CHAT_ID = "1576867878"
 
-MONTO_POR_TRADE  = 8.0      # USDT por operación
+MONTO_POR_TRADE  = 25.0     # usar la mayor parte del capital disponible
 MONTO_MIN        = 6.0      # mínimo para operar
-MAX_POSICIONES   = 4        # máximo posiciones simultáneas
+MAX_POSICIONES   = 1        # solo 1 posición — concentrar capital
 STOP_LOSS        = 0.030    # -3% stop loss — dar tiempo al precio
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
 MIN_GANANCIA_TRAIL = 0.020  # activar trailing con +2% mínimo
-MINUTOS_ESTANCADO = 45      # minutos sin moverse para liberar
+MINUTOS_ESTANCADO = 120     # 2 horas sin moverse para liberar
 RANGO_ESTANCADO  = 0.015    # ±1.5% para considerar estancada
 CICLO_PUMP       = 15       # segundos entre scans de pump
 CICLO_MAIN       = 90       # segundos entre ciclos principales
@@ -944,10 +944,9 @@ def detectar_pumps():
                 rsi = calcular_rsi(precios)
 
                 es_pump = (
-                    (c5m >= 0.3 and ratio_vol >= 20.0) or  # Vol 20x mínimo señal fuerte
-                    (c5m >= 1.0 and ratio_vol >= 10.0) or  # subida 1% con vol 10x
-                    (c15m >= 3.0 and ratio_vol >= 8.0)     # subida 3% en 15m con vol 8x
-                ) and 35 <= rsi <= 68  # RSI sano
+                    (c5m >= 0.5 and ratio_vol >= 50.0) or  # Vol 50x — señal excepcional
+                    (c5m >= 1.5 and ratio_vol >= 20.0)     # subida fuerte con vol alto
+                ) and 35 <= rsi <= 65  # RSI sano
 
                 if es_pump:
                     # Verificar order book — solo entrar si hay presión compradora
