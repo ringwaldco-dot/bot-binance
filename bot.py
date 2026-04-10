@@ -53,9 +53,9 @@ RACHA_PERDIDAS_REDUCIR = 3   # 3 pérdidas seguidas → reduce montos
 RACHA_GANANCIAS_SUBIR = 3    # 3 ganancias seguidas → sube montos
 
 # Posiciones estancadas
-HORAS_ESTANCADO = 4          # horas sin movimiento antes de liberar
-UMBRAL_ESTANCADO_MAX = 0.5   # máximo +0.5% para considerar estancada
-UMBRAL_ESTANCADO_MIN = -1.0  # mínimo -1.0% para considerar estancada
+HORAS_ESTANCADO = 0.5        # 30 minutos sin movimiento antes de liberar
+UMBRAL_ESTANCADO_MAX = 0.8   # máximo +0.8% para considerar estancada
+UMBRAL_ESTANCADO_MIN = -1.5  # mínimo -1.5% para considerar estancada
 ALERTA_CADA_HORAS = 6        # resumen cada 6hs
 
 HISTORIAL_FILE = "historial_binance.json"
