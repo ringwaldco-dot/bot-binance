@@ -32,7 +32,7 @@ TELEGRAM_CHAT_ID = "1576867878"
 MONTO_POR_TRADE  = 8.0      # USDT por operación
 MONTO_MIN        = 6.0      # mínimo para operar
 MAX_POSICIONES   = 4        # máximo posiciones simultáneas
-STOP_LOSS        = 0.025    # -2.5% stop loss
+STOP_LOSS        = 0.015    # -1.5% stop loss
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
 MIN_GANANCIA_TRAIL = 0.005  # activar trailing con +0.5% (cubre fees)
 MINUTOS_ESTANCADO = 30      # minutos sin moverse para liberar
@@ -402,7 +402,8 @@ def elegir_sacrificable():
         score = 0
         if pct < 0: score += abs(pct) * 10
         if minutos > 15 and abs(pct) < 0.5: score += minutos / 5
-        if pct > 2.0: score -= 50  # no sacrificar posiciones con buena ganancia
+        if pct > 2.0: score -= 50   # no sacrificar con buena ganancia
+        if pct > -1.0: score -= 30  # no sacrificar si pérdida menor a 1%
 
         candidatos.append({'par': pos['par'], 'cantidad': pos.get('cantidad', 0),
                            'precio_actual': p_actual, 'pct': round(pct, 3), 'score': score})
@@ -482,7 +483,7 @@ def detectar_pumps():
                     (c2m >= 0.2 and ratio_vol >= 2.0) or
                     (c5m >= 1.0 and ratio_vol >= 1.5) or
                     (c15m >= 3.0 and ratio_vol >= 1.3)
-                ) and rsi < 82
+                ) and rsi < 75
 
                 if es_pump:
                     pumps.append({
@@ -555,6 +556,9 @@ def thread_pumps():
                     time.sleep(CICLO_PUMP)
                     continue
 
+            if mejor['c5m'] < 0.3:
+                time.sleep(CICLO_PUMP)
+                continue
             tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']}")
 
             # Obtener capital — rebalancear si es necesario
