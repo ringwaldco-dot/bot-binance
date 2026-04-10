@@ -58,6 +58,8 @@ listing_detector = ListingDetector()
 # TELEGRAM
 # ============================================================
 
+LAST_UPDATE_ID = 0
+
 def tg(msg):
     try:
         requests.post(
@@ -67,6 +69,86 @@ def tg(msg):
         )
     except:
         pass
+
+def procesar_comandos():
+    """Escucha comandos de Telegram y los ejecuta."""
+    global LAST_UPDATE_ID
+    try:
+        r = requests.get(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+            params={"offset": LAST_UPDATE_ID + 1, "timeout": 5},
+            timeout=10
+        )
+        updates = r.json().get('result', [])
+        for update in updates:
+            LAST_UPDATE_ID = update['update_id']
+            msg = update.get('message', {})
+            chat_id = str(msg.get('chat', {}).get('id', ''))
+            texto = msg.get('text', '').strip().lower()
+
+            if chat_id != TELEGRAM_CHAT_ID:
+                continue
+
+            if texto == '/vender_todo':
+                tg("🔄 Vendiendo todas las posiciones...")
+                historial = cargar_historial()
+                vendidas = 0
+                for i, pos in enumerate(historial):
+                    if pos.get('estado') != 'abierta':
+                        continue
+                    p_actual = precio(pos['par'])
+                    if not p_actual:
+                        continue
+                    pct = ((p_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])) * 100
+                    res = vender(pos['par'], pos.get('cantidad', 0), round(pct, 3), 'comando_manual')
+                    if res:
+                        historial[i].update({
+                            'estado': 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida',
+                            'precio_venta': p_actual, 'ganancia_pct': round(pct, 3),
+                            'razon_cierre': 'vender_todo',
+                            'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        vendidas += 1
+                guardar_historial(historial)
+                cap = capital_usdt()
+                tg(f"✅ Vendidas {vendidas} posiciones\n💰 Capital libre: ${cap:.2f} USDT")
+
+            elif texto == '/estado':
+                historial = cargar_historial()
+                abiertas = [p for p in historial if p.get('estado') == 'abierta']
+                cap = capital_usdt()
+                pos_str = ""
+                for p in abiertas:
+                    p_actual = precio(p['par'])
+                    if p_actual:
+                        pct = ((p_actual - float(p['precio_compra'])) / float(p['precio_compra'])) * 100
+                        pos_str += f"\n• {p['par']} {pct:+.2f}%"
+                tg(f"📊 <b>Estado del bot</b>\n💰 Capital: ${cap:.2f}\n📂 Abiertas: {len(abiertas)}{pos_str}")
+
+            elif texto == '/reset_historial':
+                guardar_historial([])
+                tg("✅ Historial reseteado — bot arranca limpio")
+
+            elif texto == '/ayuda':
+                tg(
+                    "🤖 <b>Comandos disponibles:</b>\n"
+                    "/estado — ver capital y posiciones\n"
+                    "/vender_todo — vender todas las posiciones\n"
+                    "/reset_historial — limpiar historial\n"
+                    "/ayuda — ver esta lista"
+                )
+    except Exception as e:
+        print(f"  [CMD] Error: {e}")
+
+def thread_comandos():
+    """Thread que escucha comandos de Telegram cada 5 segundos."""
+    print("  [CMD] Thread de comandos iniciado ✓")
+    while True:
+        try:
+            procesar_comandos()
+        except:
+            pass
+        time.sleep(5)
 
 # ============================================================
 # HISTORIAL
@@ -851,6 +933,7 @@ if __name__ == "__main__":
     # sincronizar()  # DESHABILITADO — causa rebalanceos innecesarios
     threading.Thread(target=iniciar_dashboard, daemon=True).start()
     threading.Thread(target=thread_pumps, daemon=True).start()
+    threading.Thread(target=thread_comandos, daemon=True).start()
     print("  Threads iniciados ✓")
     while True:
         try:
