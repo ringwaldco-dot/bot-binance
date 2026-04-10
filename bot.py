@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from binance.client import Client
 import google.generativeai as genai
+from market_monitor import MonitorMercado
+from listing_detector import ListingDetector
 
 load_dotenv()
 
@@ -49,6 +51,8 @@ client_gemini = genai.GenerativeModel(
     model_name='gemini-2.0-flash',
     generation_config=genai.GenerationConfig(temperature=0.2, max_output_tokens=100)
 )
+monitor_mercado = MonitorMercado()
+listing_detector = ListingDetector()
 
 # ============================================================
 # TELEGRAM
@@ -730,6 +734,7 @@ def scalp_candidatos(historial, cap):
 # ============================================================
 
 SINC_CICLO = 0
+MONITOR_CICLO = 0
 
 def main():
     global SINC_CICLO
@@ -750,19 +755,89 @@ def main():
     # Revisar posiciones
     revisar_posiciones()
 
-    # SCALPING — buscar oportunidades cada ciclo
-    if len(abiertas) < MAX_POSICIONES and cap >= MONTO_MIN:
+    # Recargar historial actualizado
+    historial = cargar_historial()
+    abiertas = [p for p in historial if p.get('estado') == 'abierta']
+    pares_activos = {p['par'] for p in abiertas}
+    cap = capital_usdt()
+
+    if len(abiertas) >= MAX_POSICIONES or cap < MONTO_MIN:
+        return
+
+    # MONITOR — cada 5 ciclos (~7.5 min)
+    global MONITOR_CICLO
+    MONITOR_CICLO += 1
+    if MONITOR_CICLO >= 5:
+        MONITOR_CICLO = 0
         try:
-            scalp_candidatos(historial, cap)
+            señales = monitor_mercado.escanear()
+            for señal in señales:
+                if len([p for p in cargar_historial() if p.get('estado') == 'abierta']) >= MAX_POSICIONES:
+                    break
+                par = señal['par_binance']
+                if par in pares_activos or en_blacklist(par):
+                    continue
+                cap = capital_usdt()
+                if cap < MONTO_MIN:
+                    break
+                monto = min(MONTO_POR_TRADE, cap * 0.95)
+                exito, cantidad, precio_c = comprar(par, monto)
+                if exito:
+                    h = cargar_historial()
+                    h.append({
+                        'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                        'cantidad': cantidad, 'monto': monto,
+                        'estado': 'abierta', 'estrategia': 'monitor',
+                        'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    guardar_historial(h)
+                    pares_activos.add(par)
+                    tg(f"📡 <b>MONITOR</b> {par}\n{señal['n_fuentes']} fuentes | {señal['confianza_groq']}/10\n💰 ${monto:.2f}")
         except Exception as e:
-            print(f"  Error scalping: {e}")
+            print(f"  Error monitor: {e}")
+
+    # LISTINGS — nuevos pares en Binance
+    try:
+        for listing in listing_detector.detectar_nuevos():
+            if len([p for p in cargar_historial() if p.get('estado') == 'abierta']) >= MAX_POSICIONES:
+                break
+            par = listing['par']
+            if par in pares_activos or en_blacklist(par):
+                continue
+            cap = capital_usdt()
+            if cap < MONTO_MIN:
+                break
+            monto = min(MONTO_POR_TRADE * 0.5, cap * 0.95)  # montos más chicos para listings
+            if monto < MONTO_MIN:
+                continue
+            exito, cantidad, precio_c = comprar(par, monto)
+            if exito:
+                h = cargar_historial()
+                h.append({
+                    'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                    'cantidad': cantidad, 'monto': monto,
+                    'estado': 'abierta', 'estrategia': 'listing',
+                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                guardar_historial(h)
+                pares_activos.add(par)
+                tg(f"🆕 <b>LISTING</b> {par}\nNuevo par detectado\n💰 ${monto:.2f}")
+    except Exception as e:
+        print(f"  Error listings: {e}")
+
+    # SCALPING — buscar oportunidades cada ciclo
+    try:
+        scalp_candidatos(historial, cap)
+    except Exception as e:
+        print(f"  Error scalping: {e}")
 
 if __name__ == "__main__":
     tg(
         "🤖 <b>Bot Binance v6</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌍 Sin restricciones horarias — 24/7\n"
         "🚀 Pump detector: ciclo 15s\n"
-        "📈 Scalping: ciclo 90s\n"
+        "📈 Scalping + Monitor + Listings 24/7\n"
         "🔄 Loop principal: ciclo 90s\n"
         "📊 Trailing inteligente activo\n"
         "🔄 Rebalanceo automático\n"
