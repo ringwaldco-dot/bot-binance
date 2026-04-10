@@ -671,35 +671,63 @@ def rebalancear_si_necesario(oportunidad, tipo='pump', confianza=0):
 def detectar_pumps_rapido():
     try:
         tickers = client_binance.get_ticker()
+        # Ampliar a todos los pares USDT con volumen mínimo $300k (antes $1M y solo top 100)
         usdt = [t for t in tickers
                 if t['symbol'].endswith('USDT')
-                and float(t['quoteVolume']) > 1000000
-                and float(t['lastPrice']) > 0.0001
-                and float(t['lastPrice']) < 500
+                and float(t['quoteVolume']) > 300000
+                and float(t['lastPrice']) > 0.000001
+                and float(t['lastPrice']) < 1000
                 and not esta_en_blacklist(t['symbol'])]
+
+        # Ordenar por % de cambio en 24h descendente — los que más se mueven primero
+        usdt.sort(key=lambda x: float(x['priceChangePercent']), reverse=True)
+
         pumps = []
-        for t in usdt[:100]:
+        for t in usdt[:200]:  # escanear top 200 (antes 100)
             par = t['symbol']
             try:
-                klines = client_binance.get_klines(symbol=par, interval='1m', limit=8)
+                klines = client_binance.get_klines(symbol=par, interval='1m', limit=15)
                 precios = [float(k[4]) for k in klines]
                 vols = [float(k[5]) for k in klines]
-                c3m = ((precios[-1] - precios[-3]) / precios[-3]) * 100
-                c5m = ((precios[-1] - precios[-5]) / precios[-5]) * 100
-                vol_prom = np.mean(vols[:-2])
-                ratio_vol = np.mean(vols[-2:]) / vol_prom if vol_prom > 0 else 1
+
+                # Cambios en distintos timeframes
+                c2m  = ((precios[-1] - precios[-3])  / precios[-3])  * 100
+                c5m  = ((precios[-1] - precios[-6])  / precios[-6])  * 100
+                c15m = ((precios[-1] - precios[-15]) / precios[-15]) * 100
+
+                vol_prom = np.mean(vols[:-3]) if len(vols) > 3 else 1
+                ratio_vol = np.mean(vols[-3:]) / vol_prom if vol_prom > 0 else 1
                 rsi = calcular_rsi(precios)
-                if c3m >= 0.4 and c5m >= 0.5 and ratio_vol >= 1.8 and rsi < 75:
+
+                # Detectar momentum temprano:
+                # - Subida de 0.2% en 2 min (entrada temprana, antes 0.4%)
+                # - O subida de 1% en 5 min
+                # - O subida de 3% en 15 min (tendencia sostenida)
+                # - Volumen aumentando (ratio > 1.5)
+                # - RSI no sobrecomprado (< 80)
+                es_pump = (
+                    (c2m >= 0.2 and ratio_vol >= 2.0) or
+                    (c5m >= 1.0 and ratio_vol >= 1.5) or
+                    (c15m >= 3.0 and ratio_vol >= 1.3)
+                ) and rsi < 80
+
+                if es_pump:
                     pumps.append({
-                        'par': par, 'cambio_3m': round(c3m, 3),
-                        'cambio_5m': round(c5m, 3), 'ratio_vol': round(ratio_vol, 2),
-                        'rsi': round(rsi, 1), 'score': obtener_score_par(par)
+                        'par': par,
+                        'cambio_2m': round(c2m, 3),
+                        'cambio_5m': round(c5m, 3),
+                        'cambio_15m': round(c15m, 3),
+                        'ratio_vol': round(ratio_vol, 2),
+                        'rsi': round(rsi, 1),
+                        'score': obtener_score_par(par)
                     })
             except:
                 continue
-            time.sleep(0.05)
-        pumps.sort(key=lambda x: x['ratio_vol'] * (1 + x['score'] / 100), reverse=True)
-        return pumps[:3]
+            time.sleep(0.03)
+
+        # Ordenar por momentum — combina ratio de volumen, cambio y score
+        pumps.sort(key=lambda x: x['ratio_vol'] * (1 + x['cambio_5m'] / 10) * (1 + x['score'] / 100), reverse=True)
+        return pumps[:5]  # top 5 candidatos (antes 3)
     except Exception as e:
         print(f"  Error detectar_pumps_rapido: {e}")
         return []
@@ -716,42 +744,49 @@ def _cerrar_posicion_historial(par, precio_actual, pct, estado):
     guardar_historial(historial)
 
 def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
+    """Mantiene la posición mientras sube, vende solo cuando baja desde el máximo."""
     precio_maximo = precio_compra
     inicio = time.time()
-    print(f"  [WATCH] {par} ${precio_compra:.6f} TP:{TAKE_PROFIT_PUMP*100}% SL:{STOP_LOSS_PUMP*100}%")
-    while time.time() - inicio < 300:
+    timeout = 3600  # máximo 1 hora (antes 5 minutos)
+    print(f"  [WATCH] {par} ${precio_compra:.6f} — trailing inteligente activo")
+
+    while time.time() - inicio < timeout:
         time.sleep(5)
         precio_actual = obtener_precio(par)
         if not precio_actual:
             continue
+
+        # Actualizar máximo
         if precio_actual > precio_maximo:
             precio_maximo = precio_actual
+
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
-        caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
+        caida_desde_max = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
         trail = trailing_dinamico(pct)
-        if cambio >= TAKE_PROFIT and caida >= trail:
-            print(f"  [WATCH] TRAILING {par} +{pct}%")
-            with _lock:
-                ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing')
-            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
-            return
-        if cambio >= TAKE_PROFIT_PUMP:
-            print(f"  [WATCH] TP {par} +{pct}%!")
-            with _lock:
-                ejecutar_venta(par, cantidad, precio_actual, pct, 'pump')
-            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia')
-            return
+
+        # Stop loss — si cae desde la entrada directamente
         if cambio <= -STOP_LOSS_PUMP:
             print(f"  [WATCH] SL {par} {pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'perdida')
             _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_perdida')
             return
+
+        # Trailing inteligente — vende cuando baja X% desde el máximo
+        # Solo activa si ya ganó al menos 0.5% para no vender por ruido
+        if pct >= 0.5 and caida_desde_max >= trail:
+            print(f"  [WATCH] TRAILING {par} max:+{((precio_maximo-precio_compra)/precio_compra)*100:.2f}% actual:+{pct}%")
+            with _lock:
+                ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing' if pct > 0 else 'perdida')
+            _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida')
+            return
+
+    # Timeout — vende lo que haya
     precio_actual = obtener_precio(par) or precio_compra
     cambio = (precio_actual - precio_compra) / precio_compra
     pct = round(cambio * 100, 3)
-    print(f"  [WATCH] TIMEOUT {par} {pct}%")
+    print(f"  [WATCH] TIMEOUT 1h {par} {pct}%")
     with _lock:
         ejecutar_venta(par, cantidad, precio_actual, pct, 'ganancia' if pct > 0 else 'perdida')
     _cerrar_posicion_historial(par, precio_actual, pct, 'cerrada_ganancia' if pct > 0 else 'cerrada_perdida')
