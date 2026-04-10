@@ -931,8 +931,18 @@ def ciclo_pump_agresivo():
                     print(f"  [PUMP] max posiciones — pumps:{pumps_ab} total:{total_ab}")
                     break
                 if capital < MONTO_MIN:
-                    print(f"  [PUMP] sin capital ${capital:.2f}")
-                    continue
+                    # Para pumps muy fuertes (vol > 5x) rebalancear agresivamente
+                    if p.get('ratio_vol', 0) >= 5.0:
+                        liberado = rebalancear_si_necesario(p, tipo='pump')
+                        if liberado:
+                            capital = obtener_capital_disponible()
+                            time.sleep(1)
+                        else:
+                            print(f"  [PUMP] sin capital y no pudo rebalancear")
+                            continue
+                    else:
+                        print(f"  [PUMP] sin capital ${capital:.2f}")
+                        continue
                 monto = min(MONTO_PUMP, capital * 0.9)
                 if monto < MONTO_MIN:
                     continue
