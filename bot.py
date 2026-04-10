@@ -322,6 +322,39 @@ def calcular_ema(precios, periodo):
     return ema
 
 # ============================================================
+# ESTADO DEL MERCADO — BTC como indicador
+# ============================================================
+
+def estado_mercado():
+    """
+    Analiza BTC para determinar si el mercado está favorable para operar.
+    Retorna: 'activo', 'neutro' o 'defensivo'
+    """
+    try:
+        klines = client_binance.get_klines(symbol='BTCUSDT', interval='1h', limit=4)
+        precios = [float(k[4]) for k in klines]
+        
+        c1h = ((precios[-1] - precios[-2]) / precios[-2]) * 100
+        c2h = ((precios[-1] - precios[-3]) / precios[-3]) * 100
+        c3h = ((precios[-1] - precios[-4]) / precios[-4]) * 100
+        
+        print(f"  [BTC] 1h:{c1h:+.2f}% 2h:{c2h:+.2f}% 3h:{c3h:+.2f}%")
+        
+        # Mercado activo — BTC subiendo
+        if c1h >= 0.3 and c2h >= 0.5:
+            return 'activo', c1h
+        
+        # Mercado defensivo — BTC cayendo
+        if c1h <= -1.0 or c2h <= -1.5 or c3h <= -2.0:
+            return 'defensivo', c1h
+        
+        # Neutral — movimiento lateral
+        return 'neutro', c1h
+    except Exception as e:
+        print(f"  [BTC] Error: {e}")
+        return 'neutro', 0
+
+# ============================================================
 # TRAILING DINÁMICO
 # ============================================================
 
@@ -825,6 +858,21 @@ def thread_noticias():
 # DETECTOR DE PUMPS
 # ============================================================
 
+def estado_mercado():
+    """Retorna el estado del mercado basado en BTC últimas 2 horas."""
+    try:
+        klines = client_binance.get_klines(symbol='BTCUSDT', interval='1h', limit=3)
+        precios = [float(k[4]) for k in klines]
+        c1h = ((precios[-1] - precios[-2]) / precios[-2]) * 100
+        c2h = ((precios[-1] - precios[-3]) / precios[-3]) * 100
+        if c2h <= -1.5 or c1h <= -1.0:
+            return 'bajista', c2h
+        elif c2h >= 1.5 or c1h >= 1.0:
+            return 'alcista', c2h
+        return 'neutral', c2h
+    except:
+        return 'neutral', 0
+
 def detectar_pumps():
     """Detecta pares con momentum fuerte."""
     try:
@@ -949,10 +997,29 @@ def thread_pumps():
                     time.sleep(CICLO_PUMP)
                     continue
 
+            # Verificar estado del mercado antes de comprar
+            estado, btc_1h = estado_mercado()
+            if estado == 'defensivo':
+                print(f"  [MKT] Mercado defensivo (BTC {btc_1h:+.2f}%) — pausando entradas")
+                time.sleep(CICLO_PUMP)
+                continue
+            
             if mejor['c5m'] < 0.3:
                 time.sleep(CICLO_PUMP)
                 continue
-            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f} | Score:{mejor.get('score',50)}/100 ({mejor.get('ops',0)} ops)")
+
+            # Verificar estado del mercado
+            mercado, btc_cambio = estado_mercado()
+            if mercado == 'bajista':
+                # Mercado bajista — solo entrar con señales muy fuertes
+                if mejor['ratio_vol'] < 8.0 and mejor['c5m'] < 2.0:
+                    print(f"  [MERCADO] Bajista ({btc_cambio:.1f}%) — señal insuficiente para {par}")
+                    time.sleep(CICLO_PUMP)
+                    continue
+                print(f"  [MERCADO] Bajista pero señal muy fuerte — entrando en {par}")
+
+            mercado_str = '📈' if mercado == 'alcista' else '📉' if mercado == 'bajista' else '➡️'
+            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f} | Score:{mejor.get('score',50)}/100 ({mejor.get('ops',0)} ops) | {mercado_str}BTC:{btc_cambio:+.1f}%")
 
             # Obtener capital — rebalancear si es necesario
             cap = capital_usdt()
@@ -1222,11 +1289,15 @@ def main():
     except Exception as e:
         print(f"  Error listings: {e}")
 
-    # SCALPING — buscar oportunidades cada ciclo
-    try:
-        scalp_candidatos(historial, cap)
-    except Exception as e:
-        print(f"  Error scalping: {e}")
+    # SCALPING — solo si mercado favorable
+    estado_mkt, btc_1h = estado_mercado()
+    if estado_mkt == 'defensivo':
+        print(f"  [MKT] Mercado defensivo (BTC {btc_1h:+.2f}%) — scalping pausado")
+    else:
+        try:
+            scalp_candidatos(historial, cap)
+        except Exception as e:
+            print(f"  Error scalping: {e}")
 
 if __name__ == "__main__":
     tg(
