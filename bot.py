@@ -753,11 +753,8 @@ def main():
     print(f"  Capital: ${cap:.2f} | Abiertas: {len(abiertas)}")
     print(f"{'='*50}")
 
-    # Sincronización cada 20 ciclos (~30 min)
-    SINC_CICLO += 1
-    if SINC_CICLO >= 20:
-        SINC_CICLO = 0
-        sincronizar()
+    # Sincronización deshabilitada — causa rebalanceos con posiciones externas
+    # SINC_CICLO += 1
 
     # Revisar posiciones
     revisar_posiciones()
@@ -851,7 +848,7 @@ if __name__ == "__main__":
         "⏱️ Libera posiciones estancadas 30min\n"
         "🤖 IA: Gemini 2.0 Flash"
     )
-    sincronizar()
+    # sincronizar()  # DESHABILITADO — causa rebalanceos innecesarios
     threading.Thread(target=iniciar_dashboard, daemon=True).start()
     threading.Thread(target=thread_pumps, daemon=True).start()
     print("  Threads iniciados ✓")
@@ -862,4 +859,3 @@ if __name__ == "__main__":
             print(f"Error main: {e}")
             tg(f"⚠️ Error: {e}")
         time.sleep(CICLO_MAIN)
-
