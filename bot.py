@@ -531,6 +531,64 @@ def rebalancear(oportunidad):
     return cap
 
 # ============================================================
+# ANÁLISIS ORDER BOOK
+# ============================================================
+
+def analizar_order_book(par, niveles=20):
+    """
+    Analiza el order book de Binance para detectar presión compradora/vendedora.
+    Retorna un score entre -1 (presión vendedora) y +1 (presión compradora).
+    """
+    try:
+        ob = client_binance.get_order_book(symbol=par, limit=niveles)
+        bids = ob['bids']  # órdenes de compra
+        asks = ob['asks']  # órdenes de venta
+
+        # Sumar el volumen total de compras y ventas
+        vol_compras = sum(float(b[0]) * float(b[1]) for b in bids)
+        vol_ventas  = sum(float(a[0]) * float(a[1]) for a in asks)
+
+        total = vol_compras + vol_ventas
+        if total == 0:
+            return 0
+
+        # Score: +1 = todo compras, -1 = todo ventas
+        score = (vol_compras - vol_ventas) / total
+
+        # Detectar walls — órdenes muy grandes que pueden bloquear el precio
+        max_bid = max(float(b[1]) for b in bids)
+        max_ask = max(float(a[1]) for a in asks)
+        avg_bid = np.mean([float(b[1]) for b in bids])
+        avg_ask = np.mean([float(a[1]) for a in asks])
+
+        # Si hay un wall de venta grande → penalizar
+        if max_ask > avg_ask * 5:
+            score -= 0.2
+
+        # Si hay un wall de compra grande → bonificar
+        if max_bid > avg_bid * 5:
+            score += 0.2
+
+        return round(max(-1, min(1, score)), 3)
+    except:
+        return 0
+
+def obtener_funding_rate(par):
+    """Obtiene el funding rate de futuros — negativo = muchos shorts = posible squeeze."""
+    try:
+        # Convertir USDT a USD para futuros
+        r = requests.get(
+            f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={par}",
+            timeout=5
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return float(data.get('lastFundingRate', 0))
+        return 0
+    except:
+        return 0
+
+# ============================================================
 # DETECTOR DE PUMPS
 # ============================================================
 
@@ -568,10 +626,16 @@ def detectar_pumps():
                 ) and 40 <= rsi <= 68  # RSI sano, no sobrecomprado ni sobrevendido
 
                 if es_pump:
+                    # Verificar order book — solo entrar si hay presión compradora
+                    ob_score = analizar_order_book(par)
+                    if ob_score < -0.1:  # presión vendedora dominante → saltar
+                        print(f"  [OB] {par} descartado — presión vendedora ({ob_score:.2f})")
+                        continue
+
                     pumps.append({
                         'par': par, 'c2m': round(c2m, 3), 'c5m': round(c5m, 3),
                         'c15m': round(c15m, 3), 'ratio_vol': round(ratio_vol, 2),
-                        'rsi': round(rsi, 1)
+                        'rsi': round(rsi, 1), 'ob_score': ob_score
                     })
             except:
                 continue
@@ -641,7 +705,7 @@ def thread_pumps():
             if mejor['c5m'] < 0.3:
                 time.sleep(CICLO_PUMP)
                 continue
-            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']}")
+            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f}")
 
             # Obtener capital — rebalancear si es necesario
             cap = capital_usdt()
