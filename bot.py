@@ -861,8 +861,10 @@ def ciclo_pump_agresivo():
                     total_ab = len([pos for pos in historial if pos.get('estado') == 'abierta'])
                     capital = obtener_capital_disponible()
                 if par in pares_en_uso or esta_en_blacklist(par):
+                    print(f"  [PUMP] {par} saltado — en uso:{par in pares_en_uso} blacklist:{esta_en_blacklist(par)}")
                     continue
                 if pumps_ab >= MAX_POSICIONES_PUMP or total_ab >= MAX_POSICIONES:
+                    print(f"  [PUMP] max posiciones — pumps:{pumps_ab} total:{total_ab}")
                     break
                 if capital < MONTO_MIN:
                     liberado = rebalancear_si_necesario(p, tipo='pump')
@@ -870,6 +872,7 @@ def ciclo_pump_agresivo():
                         capital = obtener_capital_disponible()
                         time.sleep(1)
                     else:
+                        print(f"  [PUMP] sin capital ${capital:.2f}")
                         continue
                 monto = min(MONTO_PUMP, capital * 0.9)
                 if monto < MONTO_MIN:
