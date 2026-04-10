@@ -854,12 +854,13 @@ def ciclo_pump_agresivo():
                 )
             for p in pumps:
                 par = p['par']
-                with _lock:
-                    historial = cargar_historial()
-                    pares_en_uso = {pos['par'] for pos in historial if pos.get('estado') == 'abierta'}
-                    pumps_ab = len([pos for pos in historial if pos.get('estado') == 'abierta' and pos.get('estrategia') == 'pump'])
-                    total_ab = len([pos for pos in historial if pos.get('estado') == 'abierta'])
-                    capital = obtener_capital_disponible()
+                # Leer estado sin lock para evitar deadlock
+                historial = cargar_historial()
+                pares_en_uso = {pos['par'] for pos in historial if pos.get('estado') == 'abierta'}
+                pumps_ab = len([pos for pos in historial if pos.get('estado') == 'abierta' and pos.get('estrategia') == 'pump'])
+                total_ab = len([pos for pos in historial if pos.get('estado') == 'abierta'])
+                capital = obtener_capital_disponible()
+
                 if par in pares_en_uso or esta_en_blacklist(par):
                     print(f"  [PUMP] {par} saltado — en uso:{par in pares_en_uso} blacklist:{esta_en_blacklist(par)}")
                     continue
@@ -867,36 +868,31 @@ def ciclo_pump_agresivo():
                     print(f"  [PUMP] max posiciones — pumps:{pumps_ab} total:{total_ab}")
                     break
                 if capital < MONTO_MIN:
-                    liberado = rebalancear_si_necesario(p, tipo='pump')
-                    if liberado:
-                        capital = obtener_capital_disponible()
-                        time.sleep(1)
-                    else:
-                        print(f"  [PUMP] sin capital ${capital:.2f}")
-                        continue
+                    print(f"  [PUMP] sin capital ${capital:.2f}")
+                    continue
                 monto = min(MONTO_PUMP, capital * 0.9)
                 if monto < MONTO_MIN:
                     continue
                 print(f"  [PUMP] ENTRANDO {par} +{p['cambio_5m']}% Vol:{p['ratio_vol']}x RSI:{p['rsi']} ${monto}")
-                with _lock:
-                    exito, cantidad, precio = ejecutar_compra(par, monto, {'rsi': p['rsi']})
-                    if exito:
-                        historial = cargar_historial()
-                        historial.append({
-                            'par': par, 'precio_compra': precio, 'precio_maximo': precio,
-                            'cantidad': cantidad, 'monto': monto, 'rsi_entrada': p['rsi'],
-                            'confianza': 9, 'razon': f"PUMP {p['cambio_5m']}% vol {p['ratio_vol']}x",
-                            'onchain_score': 0.0, 'en_perdida_desde': None,
-                            'estado': 'abierta', 'estrategia': 'pump',
-                            'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        })
-                        guardar_historial(historial)
-                        enviar_telegram(
-                            f"🚀 <b>PUMP</b> {par}\n"
-                            f"+{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']}\n"
-                            f"💰 ${monto} | TP:{TAKE_PROFIT_PUMP*100}% SL:{STOP_LOSS_PUMP*100}%"
-                        )
-                        threading.Thread(target=vigilar_posicion_pump, args=(par, precio, cantidad, monto), daemon=True).start()
+                exito, cantidad, precio = ejecutar_compra(par, monto, {'rsi': p['rsi']})
+                if exito:
+                    historial = cargar_historial()
+                    historial.append({
+                        'par': par, 'precio_compra': precio, 'precio_maximo': precio,
+                        'cantidad': cantidad, 'monto': monto, 'rsi_entrada': p['rsi'],
+                        'confianza': 9, 'razon': f"PUMP {p['cambio_5m']}% vol {p['ratio_vol']}x",
+                        'onchain_score': 0.0, 'en_perdida_desde': None,
+                        'estado': 'abierta', 'estrategia': 'pump',
+                        'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    guardar_historial(historial)
+                    enviar_telegram(
+                        f"🚀 <b>PUMP</b> {par}\n"
+                        f"+{p['cambio_5m']}% | Vol {p['ratio_vol']}x | RSI {p['rsi']}\n"
+                        f"💰 ${monto}"
+                    )
+                    threading.Thread(target=vigilar_posicion_pump, args=(par, precio, cantidad, monto), daemon=True).start()
+                    break  # una compra por ciclo pump
         except Exception as e:
             print(f"  [PUMP THREAD] Error: {e}")
         time.sleep(CICLO_PUMP_SEGUNDOS)
