@@ -38,8 +38,8 @@ STOP_LOSS = 0.008
 STOP_LOSS_PUMP = 0.006
 TRAILING_STOP = 0.004  # base, se ajusta dinámicamente por tramos
 CRASH_THRESHOLD = -8.0
-CUT_LOSS_UMBRAL = -0.003
-CUT_LOSS_MINUTOS = 5
+CUT_LOSS_UMBRAL = -0.002  # -0.2% activa el contador (antes -0.3%)
+CUT_LOSS_MINUTOS = 3      # 3 minutos en pérdida → corta (antes 5)
 CICLO_PUMP_SEGUNDOS = 15
 CICLO_MAIN_SEGUNDOS = 90
 
@@ -476,15 +476,32 @@ def ejecutar_compra(par, monto, datos):
 
 def ejecutar_venta(par, cantidad, precio_actual, pct, tipo):
     try:
-        # Verificar notional mínimo antes de intentar vender
-        cumple, valor, min_notional = verificar_notional(par, cantidad, precio_actual)
-        if not cumple:
-            print(f"  [NOTIONAL] {par} valor ${valor:.2f} < mínimo ${min_notional:.2f} — esperando que suba")
-            return False
         info = client_binance.get_symbol_info(par)
         step = next(f['stepSize'] for f in info['filters'] if f['filterType'] == 'LOT_SIZE')
         dec = len(step.rstrip('0').split('.')[-1]) if '.' in step else 0
-        orden = client_binance.order_market_sell(symbol=par, quantity=round(cantidad, dec))
+
+        # Si es pérdida o cut_loss, intentar vender el balance real completo
+        # ignorando el notional — liberar capital sí o sí
+        if tipo == 'perdida':
+            try:
+                balance_real = float([b['free'] for b in client_binance.get_account()['balances']
+                                      if b['asset'] == par.replace('USDT', '')][0])
+                cantidad_venta = round(balance_real, dec)
+            except:
+                cantidad_venta = round(cantidad, dec)
+        else:
+            # Para ganancias sí respetamos el notional
+            cumple, valor, min_notional = verificar_notional(par, cantidad, precio_actual)
+            if not cumple:
+                print(f"  [NOTIONAL] {par} valor ${valor:.2f} < mínimo ${min_notional:.2f} — esperando que suba")
+                return False
+            cantidad_venta = round(cantidad, dec)
+
+        if cantidad_venta <= 0:
+            print(f"  [VENTA] {par} cantidad 0 — nada que vender")
+            return False
+
+        orden = client_binance.order_market_sell(symbol=par, quantity=cantidad_venta)
         emojis = {'ganancia': '✅', 'pump': '🚀', 'trailing': '📉', 'perdida': '🔴'}
         nombres = {'ganancia': 'TAKE PROFIT', 'pump': 'PUMP PROFIT', 'trailing': 'TRAILING STOP', 'perdida': 'STOP LOSS'}
         enviar_telegram(f"{emojis.get(tipo,'✅')} <b>{nombres.get(tipo,'VENTA')}</b> {par}\n{'Ganancia' if pct>0 else 'Pérdida'}: {pct:+.3f}%\n💰 ${precio_actual}")
