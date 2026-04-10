@@ -562,6 +562,7 @@ def revisar_cut_loss():
     with _lock:
         historial = cargar_historial()
         cambios = False
+        ahora = datetime.now()
         for i, pos in enumerate(historial):
             if pos.get('estado') != 'abierta':
                 continue
@@ -570,13 +571,35 @@ def revisar_cut_loss():
                 continue
             cambio = (precio_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])
             pct = round(cambio * 100, 3)
+
+            # Corte directo si lleva más de 2 horas en pérdida mayor a -3%
+            try:
+                fecha_compra = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+                horas = (ahora - fecha_compra).total_seconds() / 3600
+                if cambio <= -0.03 and horas >= 2:
+                    print(f"  [CUT LOSS] {pos['par']} {pct}% — {horas:.1f}hs en pérdida → cortando")
+                    if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
+                        historial[i].update({
+                            'estado': 'cerrada_perdida', 'precio_venta': precio_actual,
+                            'ganancia_pct': pct, 'razon_cierre': f'cut_loss_{horas:.0f}hs',
+                            'fecha_cierre': ahora.strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        cambios = True
+                        enviar_telegram(
+                            f"✂️ <b>CUT LOSS</b> {pos['par']}\n"
+                            f"📉 {pct:+.3f}% por {horas:.1f}hs\n"
+                            f"💡 Capital liberado"
+                        )
+                    continue
+            except:
+                pass
+
             if cambio >= 0:
                 if historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = None
                     cambios = True
                 continue
             if cambio <= CUT_LOSS_UMBRAL:
-                ahora = datetime.now()
                 if not historial[i].get('en_perdida_desde'):
                     historial[i]['en_perdida_desde'] = ahora.isoformat()
                     cambios = True
