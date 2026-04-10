@@ -34,9 +34,9 @@ TELEGRAM_CHAT_ID = "1576867878"
 MONTO_POR_TRADE  = 8.0      # USDT por operación
 MONTO_MIN        = 6.0      # mínimo para operar
 MAX_POSICIONES   = 4        # máximo posiciones simultáneas
-STOP_LOSS        = 0.015    # -1.5% stop loss
+STOP_LOSS        = 0.030    # -3% stop loss — dar tiempo al precio
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
-MIN_GANANCIA_TRAIL = 0.010  # activar trailing con +1% mínimo
+MIN_GANANCIA_TRAIL = 0.020  # activar trailing con +2% mínimo
 MINUTOS_ESTANCADO = 45      # minutos sin moverse para liberar
 RANGO_ESTANCADO  = 0.015    # ±1.5% para considerar estancada
 CICLO_PUMP       = 15       # segundos entre scans de pump
@@ -509,9 +509,39 @@ def revisar_posiciones():
 # ============================================================
 
 def elegir_sacrificable():
-    """Elige la posición con menos futuro para liberar capital."""
+    """Elige la posición con menos futuro para liberar capital.
+    Si el historial está vacío, busca en los balances reales de Binance."""
     historial = cargar_historial()
     posiciones = [p for p in historial if p.get('estado') == 'abierta']
+    
+    # Si no hay posiciones en historial, buscar en Binance directamente
+    if not posiciones:
+        try:
+            balances = client_binance.get_account()['balances']
+            for b in balances:
+                asset = b['asset']
+                libre = float(b['free'])
+                if asset == 'USDT' or libre <= 0:
+                    continue
+                par = f"{asset}USDT"
+                p_actual = precio(par)
+                if not p_actual:
+                    continue
+                valor = libre * p_actual
+                if valor < 1.0:
+                    continue
+                # Agregar al historial para que pueda ser sacrificada
+                historial.append({
+                    'par': par, 'precio_compra': p_actual, 'precio_maximo': p_actual,
+                    'cantidad': libre, 'monto': valor,
+                    'estado': 'abierta', 'estrategia': 'sync',
+                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+            guardar_historial(historial)
+            posiciones = [p for p in historial if p.get('estado') == 'abierta']
+        except Exception as e:
+            print(f"  [REBALANCEO] Error leyendo Binance: {e}")
+    
     if not posiciones:
         return None
 
@@ -901,10 +931,10 @@ def detectar_pumps():
                 rsi = calcular_rsi(precios)
 
                 es_pump = (
-                    (c5m >= 0.5 and ratio_vol >= 6.0) or   # entrada temprana: 0.5% con vol 6x
-                    (c5m >= 1.0 and ratio_vol >= 4.0) or   # subida 1%+ con vol 4x
-                    (c15m >= 3.0 and ratio_vol >= 2.5)     # subida 3%+ en 15m
-                ) and 35 <= rsi <= 65  # RSI sano
+                    (c5m >= 0.3 and ratio_vol >= 20.0) or  # Vol 20x mínimo señal fuerte
+                    (c5m >= 1.0 and ratio_vol >= 10.0) or  # subida 1% con vol 10x
+                    (c15m >= 3.0 and ratio_vol >= 8.0)     # subida 3% en 15m con vol 8x
+                ) and 35 <= rsi <= 68  # RSI sano
 
                 if es_pump:
                     # Verificar order book — solo entrar si hay presión compradora
