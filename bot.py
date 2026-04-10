@@ -812,8 +812,8 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
             return
 
         # Trailing inteligente — vende cuando baja X% desde el máximo
-        # Solo activa si ya ganó al menos 0.5% para no vender por ruido
-        if pct >= 0.5 and caida_desde_max >= trail:
+        # Solo activa si ya ganó al menos 0.1% para no vender por ruido
+        if pct >= 0.1 and caida_desde_max >= trail:
             print(f"  [WATCH] TRAILING {par} max:+{((precio_maximo-precio_compra)/precio_compra)*100:.2f}% actual:+{pct}%")
             with _lock:
                 ejecutar_venta(par, cantidad, precio_actual, pct, 'trailing' if pct > 0 else 'perdida')
@@ -950,13 +950,10 @@ def revisar_posiciones(tp_actual, sl_actual):
         trail = trailing_dinamico(pct)
         cantidad_usar = cantidad_real if cantidad_real > 0 else pos.get('cantidad', 0)
         print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}% | qty:{cantidad_usar}")
-        if cambio >= tp_actual and caida >= trail:
+
+        # Trailing inteligente — igual que pumps
+        if pct >= 0.1 and caida >= trail:
             if ejecutar_venta(pos['par'], cantidad_usar, precio_actual, pct, 'trailing'):
-                historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
-                                     'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
-                cerradas += 1
-        elif cambio >= tp_actual:
-            if ejecutar_venta(pos['par'], cantidad_usar, precio_actual, pct, 'ganancia'):
                 historial[i].update({'estado': 'cerrada_ganancia', 'precio_venta': precio_actual,
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
@@ -966,7 +963,7 @@ def revisar_posiciones(tp_actual, sl_actual):
                                      'ganancia_pct': pct, 'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                 cerradas += 1
         else:
-            print(f"  Manteniendo ({caida*100:.2f}% desde max)")
+            print(f"  Manteniendo ({caida*100:.2f}% desde max | max:{((precio_maximo-precio_compra)/precio_compra)*100:.2f}%)")
     guardar_historial(historial)
     return cerradas
 
