@@ -6,6 +6,8 @@ import json
 import math
 import time
 import threading
+import re
+import xml.etree.ElementTree as ET
 import numpy as np
 import requests
 import warnings
@@ -602,6 +604,224 @@ def obtener_funding_rate(par):
         return 0
 
 # ============================================================
+# NOTICIAS EN TIEMPO REAL — RSS gratuito
+# ============================================================
+
+NOTICIAS_VISTAS = set()
+NOTICIAS_FILE = "noticias_vistas.json"
+
+def cargar_noticias_vistas():
+    global NOTICIAS_VISTAS
+    if os.path.exists(NOTICIAS_FILE):
+        with open(NOTICIAS_FILE) as f:
+            NOTICIAS_VISTAS = set(json.load(f))
+
+def guardar_noticias_vistas():
+    with open(NOTICIAS_FILE, 'w') as f:
+        json.dump(list(NOTICIAS_VISTAS)[-500:], f)  # guardar solo las últimas 500
+
+RSS_FEEDS = [
+    "https://cointelegraph.com/rss",
+    "https://coindesk.com/arc/outboundfeeds/rss/",
+    "https://decrypt.co/feed",
+]
+
+PALABRAS_POSITIVAS = [
+    'partnership', 'listing', 'launch', 'upgrade', 'bullish',
+    'adoption', 'integration', 'mainnet', 'milestone', 'rally',
+    'surge', 'gain', 'pump', 'ath', 'breakout', 'buy', 'soars',
+    'asociación', 'lanzamiento', 'alcista', 'adopción', 'sube'
+]
+
+PALABRAS_NEGATIVAS = [
+    'hack', 'breach', 'exploit', 'lawsuit', 'ban', 'bearish',
+    'crash', 'dump', 'scam', 'fraud', 'investigation', 'sell',
+    'caída', 'baja', 'hackeo', 'estafa', 'prohibición'
+]
+
+def extraer_simbolos_noticia(titulo, descripcion=''):
+    """Extrae símbolos de criptomonedas mencionados en una noticia."""
+    texto = f"{titulo} {descripcion}".upper()
+    # Buscar patrones como BTC, ETH, $BTC, (BTC)
+    simbolos = set()
+    simbolos.update(re.findall(r'\$([A-Z]{2,8})\b', texto))
+    simbolos.update(re.findall(r'\b([A-Z]{2,8})\s+token', texto, re.I))
+    simbolos.update(re.findall(r'\(([A-Z]{2,8})\)', texto))
+
+    # Filtrar palabras comunes que no son cripto
+    ignorar = {'USD', 'EUR', 'THE', 'FOR', 'AND', 'BUT', 'NOT', 'NEW',
+               'ALL', 'GET', 'HOW', 'WHY', 'NOW', 'CEO', 'NFT', 'DeFi',
+               'SEC', 'ETF', 'API', 'ATH', 'ICO', 'DAO', 'TVL', 'APY'}
+    return [s for s in simbolos if s not in ignorar and len(s) >= 2]
+
+def analizar_sentimiento_noticia(titulo):
+    """Analiza si una noticia es positiva o negativa."""
+    titulo_lower = titulo.lower()
+    score = 0
+    for p in PALABRAS_POSITIVAS:
+        if p in titulo_lower:
+            score += 1
+    for p in PALABRAS_NEGATIVAS:
+        if p in titulo_lower:
+            score -= 1
+    return score
+
+def obtener_noticias_recientes():
+    """Obtiene noticias de los feeds RSS y retorna las relevantes."""
+    noticias_relevantes = []
+
+    for feed_url in RSS_FEEDS:
+        try:
+            r = requests.get(feed_url, timeout=8,
+                           headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                continue
+
+            root = ET.fromstring(r.content)
+            channel = root.find('channel')
+            if not channel:
+                continue
+
+            items = channel.findall('item')[:10]  # últimas 10 noticias
+            for item in items:
+                titulo = item.findtext('title', '')
+                link = item.findtext('link', '')
+                desc = item.findtext('description', '')
+
+                if not titulo or link in NOTICIAS_VISTAS:
+                    continue
+
+                simbolos = extraer_simbolos_noticia(titulo, desc)
+                sentimiento = analizar_sentimiento_noticia(titulo)
+
+                # Solo procesar noticias con símbolos y sentimiento claro
+                if simbolos and sentimiento != 0:
+                    noticias_relevantes.append({
+                        'titulo': titulo,
+                        'link': link,
+                        'simbolos': simbolos,
+                        'sentimiento': sentimiento,
+                        'fuente': feed_url.split('/')[2]
+                    })
+                    NOTICIAS_VISTAS.add(link)
+
+        except Exception as e:
+            print(f"  [NEWS] Error {feed_url}: {e}")
+        time.sleep(0.5)
+
+    guardar_noticias_vistas()
+    return noticias_relevantes
+
+def thread_noticias():
+    """Thread que monitorea noticias cada 5 minutos y actúa automáticamente."""
+    cargar_noticias_vistas()
+    print("  [NEWS] Thread de noticias iniciado ✓")
+    # Primera corrida — marcar noticias actuales como vistas sin procesar
+    obtener_noticias_recientes()
+
+    while True:
+        time.sleep(300)  # cada 5 minutos
+        try:
+            noticias = obtener_noticias_recientes()
+            for noticia in noticias:
+                simbolos = noticia['simbolos']
+                sentimiento = noticia['sentimiento']
+                titulo = noticia['titulo']
+
+                if sentimiento > 0:
+                    # Noticia positiva — intentar comprar antes que el mercado reaccione
+                    for simbolo in simbolos[:3]:
+                        par = f"{simbolo}USDT"
+                        try:
+                            p_actual = precio(par)
+                            if not p_actual:
+                                continue
+
+                            # Verificar que no está ya en uso
+                            historial = cargar_historial()
+                            pares_activos = {pos['par'] for pos in historial if pos.get('estado') == 'abierta'}
+                            if par in pares_activos or en_blacklist(par):
+                                continue
+
+                            # Verificar posiciones máximas
+                            if len(pares_activos) >= MAX_POSICIONES:
+                                continue
+
+                            # Verificar capital
+                            cap = capital_usdt()
+                            if cap < MONTO_MIN:
+                                cap = rebalancear({'par': par})
+                                if cap < MONTO_MIN:
+                                    continue
+
+                            # Confirmar con Gemini — ¿vale la pena entrar?
+                            analisis = analizar_gemini(par, 0, 50, 0)
+                            if analisis and not analisis.get('comprar'):
+                                continue
+
+                            monto = min(MONTO_POR_TRADE, cap * 0.95)
+                            if monto < MONTO_MIN:
+                                continue
+
+                            print(f"  [NEWS] 📰 Comprando {par} por noticia positiva: {titulo[:60]}")
+                            tg(
+                                f"📰 <b>Noticia positiva detectada</b>\n"
+                                f"🪙 {simbolo}: {titulo[:80]}\n"
+                                f"⚡ Comprando antes que el mercado reaccione..."
+                            )
+
+                            exito, cantidad, precio_c = comprar(par, monto)
+                            if exito:
+                                historial = cargar_historial()
+                                historial.append({
+                                    'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                                    'cantidad': cantidad, 'monto': monto,
+                                    'estado': 'abierta', 'estrategia': 'noticia',
+                                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                })
+                                guardar_historial(historial)
+                                tg(f"✅ <b>COMPRA por noticia</b> {par}\n💰 ${precio_c} | ${monto:.2f}")
+                            break  # una compra por noticia
+
+                        except Exception as e:
+                            print(f"  [NEWS] Error procesando {simbolo}: {e}")
+                            continue
+
+                elif sentimiento < -1:
+                    # Noticia muy negativa — vender si tenemos posición abierta
+                    historial = cargar_historial()
+                    for i, pos in enumerate(historial):
+                        if pos.get('estado') != 'abierta':
+                            continue
+                        asset = pos['par'].replace('USDT', '')
+                        if asset not in simbolos:
+                            continue
+
+                        p_actual = precio(pos['par'])
+                        if not p_actual:
+                            continue
+
+                        pct = ((p_actual - float(pos['precio_compra'])) / float(pos['precio_compra'])) * 100
+                        print(f"  [NEWS] 📰 Vendiendo {pos['par']} por noticia negativa")
+                        tg(
+                            f"📰 <b>Noticia negativa — vendiendo</b>\n"
+                            f"🪙 {asset}: {titulo[:80]}\n"
+                            f"📉 Saliendo de la posición {pct:+.2f}%"
+                        )
+                        res = vender(pos['par'], pos.get('cantidad', 0), round(pct, 3), 'noticia_negativa')
+                        if res:
+                            historial[i].update({
+                                'estado': 'cerrada_ganancia' if pct >= 0 else 'cerrada_perdida',
+                                'precio_venta': p_actual, 'ganancia_pct': round(pct, 3),
+                                'razon_cierre': 'noticia_negativa',
+                                'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            })
+                            guardar_historial(historial)
+
+        except Exception as e:
+            print(f"  [NEWS] Error: {e}")
+
+# ============================================================
 # DETECTOR DE PUMPS
 # ============================================================
 
@@ -1015,16 +1235,19 @@ if __name__ == "__main__":
         "🌍 Sin restricciones horarias — 24/7\n"
         "🚀 Pump detector: ciclo 15s\n"
         "📈 Scalping + Monitor + Listings 24/7\n"
+        "📰 Noticias en tiempo real (RSS)\n"
         "🔄 Loop principal: ciclo 90s\n"
         "📊 Trailing inteligente activo\n"
         "🔄 Rebalanceo automático\n"
-        "⏱️ Libera posiciones estancadas 30min\n"
+        "⏱️ Libera posiciones estancadas 45min\n"
+        "🧠 Memoria y ranking de pares\n"
         "🤖 IA: Gemini 2.0 Flash"
     )
     # sincronizar()  # DESHABILITADO — causa rebalanceos innecesarios
     threading.Thread(target=iniciar_dashboard, daemon=True).start()
     threading.Thread(target=thread_pumps, daemon=True).start()
     threading.Thread(target=thread_comandos, daemon=True).start()
+    threading.Thread(target=thread_noticias, daemon=True).start()
     print("  Threads iniciados ✓")
     while True:
         try:
