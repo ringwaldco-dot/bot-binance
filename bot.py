@@ -1168,6 +1168,76 @@ def enviar_alerta_periodica():
         print(f"  Error alerta periódica: {e}")
 
 # ============================================================
+# SINCRONIZACIÓN HISTORIAL CON BALANCES REALES
+# ============================================================
+
+def sincronizar_historial_con_binance():
+    """Al arrancar, compara el historial con los balances reales de Binance.
+    Si hay tokens en Binance que no están en el historial, los agrega."""
+    try:
+        historial = cargar_historial()
+        pares_en_historial = {p['par'] for p in historial if p.get('estado') == 'abierta'}
+
+        account = client_binance.get_account()
+        balances = account['balances']
+
+        nuevas = []
+        for b in balances:
+            asset = b['asset']
+            libre = float(b['free'])
+            if asset == 'USDT' or libre <= 0:
+                continue
+
+            par = f"{asset}USDT"
+            if par in pares_en_historial:
+                continue
+
+            # Verificar que el par existe en Binance
+            precio_actual = obtener_precio(par)
+            if not precio_actual:
+                continue
+
+            valor = libre * precio_actual
+            if valor < 1.0:  # ignorar dust (menos de $1)
+                continue
+
+            # Agregar al historial con precio actual como precio de compra
+            # (no sabemos el precio real de compra)
+            print(f"  [SYNC] {par} encontrado en Binance (${valor:.2f}) — agregando al historial")
+            nuevas.append({
+                'par': par,
+                'precio_compra': precio_actual,
+                'precio_maximo': precio_actual,
+                'cantidad': libre,
+                'monto': valor,
+                'rsi_entrada': 50,
+                'confianza': 5,
+                'razon': 'recuperado_al_arrancar',
+                'onchain_score': 0.0,
+                'en_perdida_desde': None,
+                'estado': 'abierta',
+                'estrategia': 'scalp',
+                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+
+        if nuevas:
+            historial.extend(nuevas)
+            guardar_historial(historial)
+            pares = [p['par'] for p in nuevas]
+            enviar_telegram(
+                f"🔄 <b>Sincronización</b>\n"
+                f"Encontré {len(nuevas)} posición(es) no registrada(s):\n"
+                f"{', '.join(pares)}\n"
+                f"Agregadas al historial para vigilancia."
+            )
+            print(f"  [SYNC] {len(nuevas)} posiciones sincronizadas")
+        else:
+            print(f"  [SYNC] Historial sincronizado — sin diferencias")
+
+    except Exception as e:
+        print(f"  [SYNC] Error: {e}")
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1433,6 +1503,7 @@ if __name__ == "__main__":
     threading.Thread(target=iniciar_dashboard, daemon=True).start()
     threading.Thread(target=ciclo_pump_agresivo, daemon=True).start()
     print("  [PUMP THREAD] Lanzado 24/7 ✓")
+    sincronizar_historial_con_binance()  # sincronizar al arrancar
     while True:
         try:
             main()
