@@ -34,9 +34,9 @@ MONTO_MIN        = 6.0      # mínimo para operar
 MAX_POSICIONES   = 4        # máximo posiciones simultáneas
 STOP_LOSS        = 0.015    # -1.5% stop loss
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
-MIN_GANANCIA_TRAIL = 0.005  # activar trailing con +0.5% (cubre fees)
-MINUTOS_ESTANCADO = 30      # minutos sin moverse para liberar
-RANGO_ESTANCADO  = 0.008    # ±0.8% para considerar estancada
+MIN_GANANCIA_TRAIL = 0.010  # activar trailing con +1% mínimo
+MINUTOS_ESTANCADO = 45      # minutos sin moverse para liberar
+RANGO_ESTANCADO  = 0.015    # ±1.5% para considerar estancada
 CICLO_PUMP       = 15       # segundos entre scans de pump
 CICLO_MAIN       = 90       # segundos entre ciclos principales
 
@@ -562,10 +562,10 @@ def detectar_pumps():
                 rsi = calcular_rsi(precios)
 
                 es_pump = (
-                    (c2m >= 0.2 and ratio_vol >= 2.0) or
-                    (c5m >= 1.0 and ratio_vol >= 1.5) or
-                    (c15m >= 3.0 and ratio_vol >= 1.3)
-                ) and rsi < 75
+                    (c5m >= 1.0 and ratio_vol >= 5.0) or   # subida 1%+ con vol 5x
+                    (c5m >= 2.0 and ratio_vol >= 3.0) or   # subida 2%+ con vol 3x
+                    (c15m >= 4.0 and ratio_vol >= 2.0)     # subida 4%+ en 15m
+                ) and 40 <= rsi <= 68  # RSI sano, no sobrecomprado ni sobrevendido
 
                 if es_pump:
                     pumps.append({
@@ -788,7 +788,7 @@ def scalp_candidatos(historial, cap):
             cambio_24h = float(t['priceChangePercent'])
 
             # Condiciones de entrada: RSI bajo + MACD alcista
-            if rsi > 45 or macd <= signal:
+            if rsi > 42 or macd <= signal:
                 continue
 
             print(f"  {par} RSI:{rsi:.1f} MACD:{'▲' if macd>signal else '▼'} 24h:{cambio_24h:.1f}%")
