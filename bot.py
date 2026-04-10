@@ -862,3 +862,4 @@ if __name__ == "__main__":
             print(f"Error main: {e}")
             tg(f"⚠️ Error: {e}")
         time.sleep(CICLO_MAIN)
+
