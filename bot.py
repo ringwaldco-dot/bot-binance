@@ -444,14 +444,23 @@ def filtrar_candidatos(pares_tickers):
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:20]
 
-def trailing_dinamico(ganancia_pct):
-    """Trailing stop dinámico por tramos — deja correr más las ganancias grandes."""
-    if ganancia_pct >= 3.0:
-        return 0.015   # ganó +3% → aguanta 1.5% de caída
+def trailing_dinamico(ganancia_pct, minutos_en_posicion=0):
+    """Trailing stop dinámico por tramos de ganancia y tiempo."""
+    # Primeros 10 minutos — trailing ajustado para salir rápido si no sube
+    if minutos_en_posicion < 10:
+        if ganancia_pct >= 1.0:
+            return 0.008  # ganó 1%+ en menos de 10min → trailing 0.8%
+        return 0.004      # menos de 1% → trailing 0.4% ajustado
+
+    # Después de 10 minutos — si está subiendo fuerte, dejar correr
+    if ganancia_pct >= 5.0:
+        return 0.025   # ganó +5% → trailing 2.5%, dejar correr el pump
+    elif ganancia_pct >= 3.0:
+        return 0.020   # ganó +3% → trailing 2%
     elif ganancia_pct >= 1.0:
-        return 0.008   # ganó 1-3% → aguanta 0.8% de caída
+        return 0.012   # ganó +1% → trailing 1.2%
     else:
-        return 0.004   # ganó 0-1% → vende rápido con 0.4% de caída
+        return 0.006   # menos de 1% → trailing 0.6%
 
 def verificar_notional(par, cantidad, precio_actual):
     """Verifica si la venta cumple el notional mínimo de Binance."""
@@ -801,7 +810,8 @@ def vigilar_posicion_pump(par, precio_compra, cantidad, monto):
         cambio = (precio_actual - precio_compra) / precio_compra
         pct = round(cambio * 100, 3)
         caida_desde_max = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        trail = trailing_dinamico(pct)
+        minutos_posicion = (time.time() - inicio) / 60
+        trail = trailing_dinamico(pct, minutos_posicion)
 
         # Stop loss — si cae desde la entrada directamente
         if cambio <= -STOP_LOSS_PUMP:
@@ -947,9 +957,14 @@ def revisar_posiciones(tp_actual, sl_actual):
             precio_maximo = precio_actual
             historial[i]['precio_maximo'] = precio_maximo
         caida = (precio_maximo - precio_actual) / precio_maximo if precio_maximo > 0 else 0
-        trail = trailing_dinamico(pct)
+        try:
+            fecha_compra = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+            minutos = (datetime.now() - fecha_compra).total_seconds() / 60
+        except:
+            minutos = 0
+        trail = trailing_dinamico(pct, minutos)
         cantidad_usar = cantidad_real if cantidad_real > 0 else pos.get('cantidad', 0)
-        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}% | qty:{cantidad_usar}")
+        print(f"  {pos['par']} [{pos.get('estrategia','scalp')}] | {pct:+.3f}% | trail:{trail*100:.1f}% | {minutos:.0f}min | qty:{cantidad_usar}")
 
         # Trailing inteligente — igual que pumps
         if pct >= 0.1 and caida >= trail:
