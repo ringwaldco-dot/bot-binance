@@ -39,8 +39,8 @@ STOP_LOSS = 0.008
 STOP_LOSS_PUMP = 0.006
 TRAILING_STOP = 0.004  # base, se ajusta dinámicamente por tramos
 CRASH_THRESHOLD = -8.0
-CUT_LOSS_UMBRAL = -0.002  # -0.2% activa el contador (antes -0.3%)
-CUT_LOSS_MINUTOS = 3      # 3 minutos en pérdida → corta (antes 5)
+CUT_LOSS_UMBRAL = -0.002
+CUT_LOSS_MINUTOS = 2      # 2 minutos en pérdida → corta
 CICLO_PUMP_SEGUNDOS = 15
 CICLO_MAIN_SEGUNDOS = 90
 
@@ -435,7 +435,7 @@ def filtrar_candidatos(pares_tickers):
         cambio = float(t['priceChangePercent'])
         vol = float(t['quoteVolume'])
         par = t['symbol']
-        if -5 <= cambio <= 3.0 and vol > 2000000 and not esta_en_blacklist(par):
+        if -8 <= cambio <= 5.0 and vol > 500000 and not esta_en_blacklist(par):
             candidatos.append({'par': par, 'cambio_24h': cambio, 'volumen': vol, 'score': obtener_score_par(par)})
     candidatos.sort(key=lambda x: (x['score'], -x['cambio_24h']), reverse=True)
     return candidatos[:20]
@@ -586,7 +586,7 @@ def revisar_cut_loss():
             try:
                 fecha_compra = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
                 horas = (ahora - fecha_compra).total_seconds() / 3600
-                if cambio <= -0.03 and horas >= 2:
+                if cambio <= -0.02 and horas >= 1:
                     print(f"  [CUT LOSS] {pos['par']} {pct}% — {horas:.1f}hs en pérdida → cortando")
                     if ejecutar_venta(pos['par'], pos.get('cantidad', 0), precio_actual, pct, 'perdida'):
                         historial[i].update({
@@ -1183,10 +1183,6 @@ def main():
 
     # Gestión de riesgo dinámica
     factor_riesgo, racha = analizar_racha(historial)
-    if racha == 'negativa' and tendencia == 'bajista':
-        print("  [RIESGO] Racha negativa + mercado bajista → ciclo pausado")
-        enviar_telegram("⛔ <b>Ciclo pausado</b>\nRacha negativa + mercado bajista")
-        return
     mejores_pares = obtener_mejores_pares()
     if not mejores_pares:
         return
@@ -1248,11 +1244,6 @@ def main():
     candidatos = filtrar_candidatos(mejores_pares)
     print(f"\n{len(candidatos)} candidatos scalping\n")
 
-    # Filtro BTC — si cae fuerte, pausar entradas nuevas
-    if btc_en_caida():
-        print("  [BTC FILTER] Entradas pausadas este ciclo")
-        return
-
     for c in candidatos:
         if posiciones_abiertas >= MAX_POSICIONES:
             break
@@ -1275,16 +1266,12 @@ def main():
         if not d5 or not d1h:
             continue
         print(f"  5m RSI:{d5['rsi']} MACD:{'▲' if d5['macd']>d5['macd_signal'] else '▼'} | 1h RSI:{d1h['rsi']}")
-        confirmado, razon_tf = confirmar_dos_timeframes(par)
-        if not confirmado:
-            print(f"  Sin confirmacion: {razon_tf}")
-            continue
         analisis = analizar_sentimiento_groq(par, d5, d1h, c['cambio_24h'], 'activo', c['score'], sig['score'])
         if not analisis:
             continue
-        confianza_minima = 7
+        confianza_minima = 6
         if sig['action'] == 'SLIGHT_SHORT':
-            confianza_minima = 8
+            confianza_minima = 7
         if analisis.get('comprar') and analisis.get('confianza', 0) >= confianza_minima:
             if capital_disponible < MONTO_MIN:
                 liberado = rebalancear_si_necesario(c, tipo='scalp', confianza=analisis.get('confianza', 0))
