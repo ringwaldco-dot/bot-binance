@@ -66,6 +66,7 @@ RANKING_FILE = "ranking_pares.json"
 MONITOR_CICLO = 0
 ALERTA_CICLO = 0
 _RESUMEN_CICLO = 0
+SINC_CICLO = 0
 _lock = threading.Lock()
 
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -1270,6 +1271,13 @@ def main():
     print("="*60)
     enviar_reporte_diario()
     enviar_alerta_periodica()
+
+    # Sincronizar historial con Binance cada 20 ciclos (~30 min)
+    global SINC_CICLO
+    SINC_CICLO += 1
+    if SINC_CICLO >= 20:
+        SINC_CICLO = 0
+        sincronizar_historial_con_binance()
 
     # Stop loss de capital total
     if not verificar_capital_minimo():
