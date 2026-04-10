@@ -62,6 +62,7 @@ BAIT_PATTERNS = [
 COINS_IGNORAR = {
     'SHIB2', 'ELON2', 'SAFEMOON', 'SQUID', 'LUNA2CLASSIC',
     'TURBO2', 'PEPE2', 'BONK2',
+    'BTC', 'ETH', 'BNB', 'SOL',  # demasiado caros
 }
 
 def enviar_telegram(mensaje):
@@ -254,7 +255,7 @@ Responde SOLO con JSON sin texto adicional:
             return json.loads(texto[inicio:fin+1])
     except Exception as e:
         logger.warning("Gemini analisis error: {}".format(e))
-    return {"legitimo": True, "confianza": 5, "razon": "sin analisis disponible"}
+    return {"legitimo": True, "confianza": 0, "razon": "sin analisis disponible"}  # ignorar silenciosamente
 
 
 class MonitorMercado:
@@ -325,11 +326,13 @@ class MonitorMercado:
             analisis = analizar_texto_groq(symbol, textos, fuentes)
             if not analisis["legitimo"] or analisis["confianza"] < 6:
                 print("  {} BAIT - {}".format(symbol, analisis['razon']))
-                enviar_telegram(
-                    "<b>BAIT detectado</b> - {}\nRazon: {}\nFuentes: {}".format(
-                        symbol, analisis['razon'], ', '.join(fuentes)
+                # Solo notificar si es BAIT real, no si Gemini falló
+                if analisis["confianza"] > 0:
+                    enviar_telegram(
+                        "<b>BAIT detectado</b> - {}\nRazon: {}\nFuentes: {}".format(
+                            symbol, analisis['razon'], ', '.join(fuentes)
+                        )
                     )
-                )
                 self._marcar_procesado(symbol)
                 continue
             senal = {
