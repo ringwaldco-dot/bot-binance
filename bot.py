@@ -36,7 +36,14 @@ MONTO_MIN        = 6.0      # mínimo para operar
 MAX_POSICIONES   = 1        # solo 1 posición — concentrar capital
 STOP_LOSS        = 0.030    # -3% stop loss — dar tiempo al precio
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
-MIN_GANANCIA_TRAIL = 0.020  # activar trailing con +2% mínimo
+MIN_GANANCIA_TRAIL = 0.020  # base, se ajusta dinámicamente según volumen
+
+def tp_dinamico(ratio_vol):
+    """TP más alto cuando el volumen es muy fuerte — el pump puede dar más."""
+    if ratio_vol >= 100: return 0.040  # Vol 100x → esperar +4%
+    if ratio_vol >= 50:  return 0.030  # Vol 50x  → esperar +3%
+    if ratio_vol >= 20:  return 0.025  # Vol 20x  → esperar +2.5%
+    return 0.020                        # default  → +2%
 MINUTOS_ESTANCADO = 120     # 2 horas sin moverse para liberar
 RANGO_ESTANCADO  = 0.015    # ±1.5% para considerar estancada
 CICLO_PUMP       = 15       # segundos entre scans de pump
@@ -465,7 +472,9 @@ def revisar_posiciones():
                 continue
 
         # 2. Trailing stop
-        if pct >= MIN_GANANCIA_TRAIL * 100 and caida >= trail:
+        # TP dinámico según volumen de la entrada
+        tp_min = MIN_GANANCIA_TRAIL * 100
+        if pct >= tp_min and caida >= trail:
             res = vender(pos['par'], pos.get('cantidad', 0), pct, f"trailing_max:{((p_max-p_compra)/p_compra)*100:.2f}%")
             if res:
                 historial[i].update({
@@ -916,6 +925,13 @@ def estado_mercado():
     except:
         return 'neutral', 0
 
+def en_horario_activo():
+    """Retorna True si estamos en horario de mayor volumen crypto."""
+    hora_utc = datetime.utcnow().hour
+    # Pico 1: 13:00-17:00 UTC (mercados europeos + americanos)
+    # Pico 2: 20:00-00:00 UTC (mercado americano + Asia abre)
+    return (13 <= hora_utc <= 17) or (20 <= hora_utc <= 23) or (0 <= hora_utc <= 2)
+
 def detectar_pumps():
     """Detecta pares con momentum fuerte."""
     try:
@@ -949,6 +965,16 @@ def detectar_pumps():
                 ) and 35 <= rsi <= 65  # RSI sano
 
                 if es_pump:
+                    # Confirmar tendencia — al menos 3 velas subiendo consecutivamente
+                    velas_subiendo = sum(1 for i in range(-4, -1) if precios[i] > precios[i-1])
+                    if velas_subiendo < 2:
+                        continue  # tendencia no confirmada
+
+                    # No entrar si ya subió demasiado en los últimos 3 minutos (pump viejo)
+                    if c2m > 3.0:
+                        print(f"  [PUMP] {par} ya subió {c2m:.1f}% — tarde para entrar")
+                        continue
+
                     # Verificar order book — solo entrar si hay presión compradora
                     ob_score = analizar_order_book(par)
                     if ob_score < -0.1:  # presión vendedora dominante → saltar
@@ -1049,6 +1075,13 @@ def thread_pumps():
             if mejor['c5m'] < 0.3:
                 time.sleep(CICLO_PUMP)
                 continue
+
+            # Fuera de horario activo — ser más exigente
+            if not en_horario_activo():
+                if mejor['ratio_vol'] < 80.0:
+                    print(f"  [HORARIO] Fuera de pico — señal insuficiente ({mejor['ratio_vol']}x)")
+                    time.sleep(CICLO_PUMP)
+                    continue
 
             # Verificar estado del mercado
             mercado, btc_cambio = estado_mercado()
