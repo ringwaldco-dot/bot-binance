@@ -925,6 +925,44 @@ def estado_mercado():
     except:
         return 'neutral', 0
 
+def modo_mercado():
+    """Retorna configuración según estado de BTC."""
+    try:
+        klines = client_binance.get_klines(symbol='BTCUSDT', interval='1h', limit=4)
+        precios = [float(k[4]) for k in klines]
+        c1h = ((precios[-1] - precios[-2]) / precios[-2]) * 100
+        c3h = ((precios[-1] - precios[-4]) / precios[-4]) * 100
+
+        if c1h >= 1.5 or c3h >= 2.5:
+            # BTC subiendo fuerte — ser más agresivo
+            return {
+                'modo': 'alcista',
+                'vol_min': 10.0,
+                'tp_min': 0.015,
+                'rsi_max': 72,
+                'emoji': '📈'
+            }
+        elif c1h <= -1.5 or c3h <= -2.5:
+            # BTC bajando — muy conservador
+            return {
+                'modo': 'bajista',
+                'vol_min': 80.0,
+                'tp_min': 0.030,
+                'rsi_max': 60,
+                'emoji': '📉'
+            }
+        else:
+            # Neutral — configuración normal
+            return {
+                'modo': 'neutral',
+                'vol_min': 50.0,
+                'tp_min': 0.020,
+                'rsi_max': 65,
+                'emoji': '➡️'
+            }
+    except:
+        return {'modo': 'neutral', 'vol_min': 50.0, 'tp_min': 0.020, 'rsi_max': 65, 'emoji': '➡️'}
+
 def en_horario_activo():
     """Retorna True si estamos en horario de mayor volumen crypto."""
     hora_utc = datetime.utcnow().hour
@@ -965,15 +1003,24 @@ def detectar_pumps():
                 ) and 35 <= rsi <= 65  # RSI sano
 
                 if es_pump:
-                    # Confirmar tendencia — al menos 3 velas subiendo consecutivamente
+                    # Confirmar tendencia — al menos 2 de últimas 3 velas subiendo
                     velas_subiendo = sum(1 for i in range(-4, -1) if precios[i] > precios[i-1])
                     if velas_subiendo < 2:
-                        continue  # tendencia no confirmada
+                        continue
 
-                    # No entrar si ya subió demasiado en los últimos 3 minutos (pump viejo)
+                    # No entrar si ya subió demasiado (pump viejo)
                     if c2m > 3.0:
                         print(f"  [PUMP] {par} ya subió {c2m:.1f}% — tarde para entrar")
                         continue
+
+                    # Verificar momentum sostenido en 15m
+                    try:
+                        klines15 = client_binance.get_klines(symbol=par, interval='15m', limit=4)
+                        precios15 = [float(k[4]) for k in klines15]
+                        velas15_subiendo = sum(1 for i in range(-3, 0) if precios15[i] > precios15[i-1])
+                        momentum_sostenido = velas15_subiendo >= 2
+                    except:
+                        momentum_sostenido = False
 
                     # Verificar order book — solo entrar si hay presión compradora
                     ob_score = analizar_order_book(par)
@@ -997,7 +1044,8 @@ def detectar_pumps():
                         'par': par, 'c2m': round(c2m, 3), 'c5m': round(c5m, 3),
                         'c15m': round(c15m, 3), 'ratio_vol': round(ratio_vol, 2),
                         'rsi': round(rsi, 1), 'ob_score': ob_score,
-                        'score': score, 'ops': ops, 'pct_total': pct_total
+                        'score': score, 'ops': ops, 'pct_total': pct_total,
+                        'momentum_sostenido': momentum_sostenido
                     })
             except:
                 continue
@@ -1083,18 +1131,15 @@ def thread_pumps():
                     time.sleep(CICLO_PUMP)
                     continue
 
-            # Verificar estado del mercado
-            mercado, btc_cambio = estado_mercado()
-            if mercado == 'bajista':
-                # Mercado bajista — solo entrar con señales muy fuertes
-                if mejor['ratio_vol'] < 8.0 and mejor['c5m'] < 2.0:
-                    print(f"  [MERCADO] Bajista ({btc_cambio:.1f}%) — señal insuficiente para {par}")
-                    time.sleep(CICLO_PUMP)
-                    continue
-                print(f"  [MERCADO] Bajista pero señal muy fuerte — entrando en {par}")
+            # Modo mercado — ajusta filtros según BTC
+            modo = modo_mercado()
+            if mejor['ratio_vol'] < modo['vol_min']:
+                print(f"  [MODO {modo['modo'].upper()}] Vol {mejor['ratio_vol']}x < mínimo {modo['vol_min']}x — descartado")
+                time.sleep(CICLO_PUMP)
+                continue
 
-            mercado_str = '📈' if mercado == 'alcista' else '📉' if mercado == 'bajista' else '➡️'
-            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f} | Score:{mejor.get('score',50)}/100 ({mejor.get('ops',0)} ops) | {mercado_str}BTC:{btc_cambio:+.1f}%")
+            momentum_str = "🔥 Momentum sostenido" if mejor.get('momentum_sostenido') else ""
+            tg(f"🔍 <b>Pump</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x | RSI {mejor['rsi']} | OB:{mejor.get('ob_score',0):+.2f} | {modo['emoji']} {modo['modo']} {momentum_str}")
 
             # Obtener capital — rebalancear si es necesario
             cap = capital_usdt()
