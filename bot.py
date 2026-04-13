@@ -739,8 +739,36 @@ def extraer_simbolos_noticia(titulo, descripcion=''):
                'SEC', 'ETF', 'API', 'ATH', 'ICO', 'DAO', 'TVL', 'APY'}
     return [s for s in simbolos if s not in ignorar and len(s) >= 2]
 
+def analizar_noticia_gemini(titulo, descripcion, simbolos):
+    """Gemini analiza el contexto completo de la noticia y su impacto en el precio."""
+    try:
+        simbolos_str = ', '.join(simbolos[:5]) if simbolos else 'desconocido'
+        prompt = f"""Sos un trader experto en criptomonedas. Analizá esta noticia y determiná su impacto en el precio.
+
+Título: {titulo}
+Descripción: {descripcion[:300] if descripcion else 'N/A'}
+Monedas mencionadas: {simbolos_str}
+
+Considerá:
+- ¿Es una noticia que va a hacer subir el precio en las próximas horas?
+- ¿Es FUD o noticia negativa que va a hacer bajar?
+- ¿Es solo ruido sin impacto real?
+- ¿Qué tan confiable parece la fuente?
+
+Respondé SOLO con JSON:
+{{"impacto": "positivo/negativo/neutro", "confianza": 8, "urgencia": "alta/media/baja", "razon": "1 linea clara"}}"""
+
+        r = client_gemini.generate_content(prompt)
+        texto = r.text.strip().replace('```json','').replace('```','').strip()
+        i, f = texto.find('{'), texto.rfind('}')
+        if i != -1 and f != -1:
+            return json.loads(texto[i:f+1])
+    except Exception as e:
+        print(f"  [NEWS] Gemini error: {e}")
+    return None
+
 def analizar_sentimiento_noticia(titulo):
-    """Analiza si una noticia es positiva o negativa."""
+    """Análisis básico de palabras — fallback si Gemini falla."""
     titulo_lower = titulo.lower()
     score = 0
     for p in PALABRAS_POSITIVAS:
@@ -779,11 +807,12 @@ def obtener_noticias_recientes():
                 simbolos = extraer_simbolos_noticia(titulo, desc)
                 sentimiento = analizar_sentimiento_noticia(titulo)
 
-                # Solo procesar noticias con símbolos y sentimiento claro
-                if simbolos and sentimiento != 0:
+                # Procesar si tiene símbolos (Gemini va a analizar el contexto)
+                if simbolos:
                     noticias_relevantes.append({
                         'titulo': titulo,
                         'link': link,
+                        'descripcion': desc[:300],
                         'simbolos': simbolos,
                         'sentimiento': sentimiento,
                         'fuente': feed_url.split('/')[2]
@@ -805,13 +834,32 @@ def thread_noticias():
     obtener_noticias_recientes()
 
     while True:
-        time.sleep(300)  # cada 5 minutos
+        time.sleep(60)   # cada 1 minuto
         try:
             noticias = obtener_noticias_recientes()
             for noticia in noticias:
                 simbolos = noticia['simbolos']
-                sentimiento = noticia['sentimiento']
                 titulo = noticia['titulo']
+                descripcion = noticia.get('descripcion', '')
+
+                # Gemini analiza el contexto completo
+                analisis_noticia = analizar_noticia_gemini(titulo, descripcion, simbolos)
+
+                if analisis_noticia:
+                    impacto = analisis_noticia.get('impacto', 'neutro')
+                    confianza_n = analisis_noticia.get('confianza', 0)
+                    urgencia = analisis_noticia.get('urgencia', 'baja')
+                    razon_n = analisis_noticia.get('razon', '')
+                    sentimiento = 1 if impacto == 'positivo' else -2 if impacto == 'negativo' else 0
+                    # Solo actuar si confianza alta
+                    if confianza_n < 7:
+                        print(f"  [NEWS] {titulo[:50]} — confianza baja ({confianza_n}/10)")
+                        continue
+                else:
+                    # Fallback a análisis básico
+                    sentimiento = noticia['sentimiento']
+                    urgencia = 'media'
+                    razon_n = 'análisis básico'
 
                 if sentimiento > 0:
                     # Noticia positiva — intentar comprar antes que el mercado reaccione
@@ -850,9 +898,11 @@ def thread_noticias():
 
                             print(f"  [NEWS] 📰 Comprando {par} por noticia positiva: {titulo[:60]}")
                             tg(
-                                f"📰 <b>Noticia positiva detectada</b>\n"
-                                f"🪙 {simbolo}: {titulo[:80]}\n"
-                                f"⚡ Comprando antes que el mercado reaccione..."
+                                f"📰 <b>Noticia detectada</b> — {simbolo}\n"
+                                f"{titulo[:80]}\n"
+                                f"🤖 Gemini: {razon_n}\n"
+                                f"⚡ Urgencia: {urgencia} | Confianza: {confianza_n if analisis_noticia else '?'}/10\n"
+                                f"Comprando antes que el mercado reaccione..."
                             )
 
                             exito, cantidad, precio_c = comprar(par, monto)
@@ -1133,8 +1183,17 @@ def thread_pumps():
 
             # Modo mercado — ajusta filtros según BTC
             modo = modo_mercado()
-            if mejor['ratio_vol'] < modo['vol_min']:
-                print(f"  [MODO {modo['modo'].upper()}] Vol {mejor['ratio_vol']}x < mínimo {modo['vol_min']}x — descartado")
+
+            # En modo bajista — no operar
+            if modo['modo'] == 'bajista':
+                print(f"  [MODO BAJISTA] BTC bajando — pausando entradas")
+                time.sleep(CICLO_PUMP)
+                continue
+
+            # Vol mínimo según modo
+            vol_requerido = 30.0 if modo['modo'] == 'alcista' else 60.0
+            if mejor['ratio_vol'] < vol_requerido:
+                print(f"  [MODO {modo['modo'].upper()}] Vol {mejor['ratio_vol']}x < {vol_requerido}x — descartado")
                 time.sleep(CICLO_PUMP)
                 continue
 
