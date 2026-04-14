@@ -1163,13 +1163,15 @@ def thread_pumps():
                     time.sleep(CICLO_PUMP)
                     continue
 
-            # Verificar estado del mercado antes de comprar
-            estado, btc_1h = estado_mercado()
-            if estado == 'defensivo':
-                print(f"  [MKT] Mercado defensivo (BTC {btc_1h:+.2f}%) — pausando entradas")
+            # Modo mercado — ajusta filtros según BTC
+            modo = modo_mercado()
+
+            # En modo bajista — no operar
+            if modo['modo'] == 'bajista':
+                print(f"  [MODO BAJISTA] BTC bajando — pausando entradas")
                 time.sleep(CICLO_PUMP)
                 continue
-            
+
             if mejor['c5m'] < 0.3:
                 time.sleep(CICLO_PUMP)
                 continue
@@ -1180,15 +1182,6 @@ def thread_pumps():
                     print(f"  [HORARIO] Fuera de pico — señal insuficiente ({mejor['ratio_vol']}x)")
                     time.sleep(CICLO_PUMP)
                     continue
-
-            # Modo mercado — ajusta filtros según BTC
-            modo = modo_mercado()
-
-            # En modo bajista — no operar
-            if modo['modo'] == 'bajista':
-                print(f"  [MODO BAJISTA] BTC bajando — pausando entradas")
-                time.sleep(CICLO_PUMP)
-                continue
 
             # Vol mínimo según modo
             vol_requerido = 30.0 if modo['modo'] == 'alcista' else 60.0
