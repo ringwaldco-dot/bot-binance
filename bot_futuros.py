@@ -760,6 +760,7 @@ def thread_comandos():
 # ============================================================
 
 if __name__ == "__main__":
+    # Cuando se corre directamente (no importado)
     tg(
         f"🚀 <b>Bot Trading Futuros</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -775,10 +776,7 @@ if __name__ == "__main__":
     )
     threading.Thread(target=thread_scanner, daemon=True).start()
     threading.Thread(target=thread_posiciones, daemon=True).start()
-    # threading.Thread(target=thread_comandos, daemon=True).start()  # Comandos manejados por bot.py
     threading.Thread(target=reporte_diario, daemon=True).start()
     print("  [FUT] Todos los threads iniciados ✓")
-
-    # Loop principal — mantener vivo
     while True:
         time.sleep(60)
