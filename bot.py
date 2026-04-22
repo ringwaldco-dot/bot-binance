@@ -287,7 +287,7 @@ def procesar_comandos():
                 balance_total = balance + pnl_abierto
                 rendimiento = ((balance_total - balance_inicial) / balance_inicial) * 100
                 tg(
-                    f"📄 <b>[PAPER FUTUROS] Estado</b>\n"
+                    f"📄 <b>[TRADING FUTUROS] Estado</b>\n"
                     f"💵 Balance libre: ${balance:.2f}\n"
                     f"📊 PnL abierto: ${pnl_abierto:+.4f}\n"
                     f"💰 Total: ${balance_total:.2f} ({rendimiento:+.2f}%)\n"
@@ -317,7 +317,7 @@ def procesar_comandos():
                     dir_emoji = "📈" if op.get('direccion') == 'LONG' else "📉"
                     ops_str += f"\n{emoji} {dir_emoji} {op['par']} {op.get('pct', 0):+.2f}% ({op.get('pnl_usdt', 0):+.2f} USDT)"
                 tg(
-                    f"📄 <b>Paper Futuros — Resultados</b>\n"
+                    f"📄 <b>Trading Futuros — Resultados</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                     f"💵 Balance inicial: ${balance_inicial:.2f}\n"
                     f"💰 Balance actual: ${balance:.2f}\n"
@@ -334,7 +334,7 @@ def procesar_comandos():
             elif texto == '/fut_reset':
                 with open('paper_futuros.json', 'w') as f:
                     json.dump({"balance": 1000.0, "balance_inicial": 1000.0, "posiciones": [], "historial": [], "margen_usado": 0.0}, f, indent=2)
-                tg("🔄 Paper Futuros reseteado — Balance: $1000.00 USDT")
+                tg("🔄 Trading Futuros reseteado — Balance: $1000.00 USDT")
 
             elif texto == '/fut_cerrar':
                 try:
@@ -342,7 +342,7 @@ def procesar_comandos():
                         data_fut = json.load(f)
                     posiciones = list(data_fut.get('posiciones', []))
                     if not posiciones:
-                        tg("📄 [PAPER FUTUROS] Sin posiciones abiertas")
+                        tg("📄 [TRADING FUTUROS] Sin posiciones abiertas")
                     else:
                         for pos in posiciones:
                             try:
@@ -369,13 +369,13 @@ def procesar_comandos():
                         data_fut['margen_usado'] = 0
                         with open('paper_futuros.json', 'w') as f:
                             json.dump(data_fut, f, indent=2)
-                        tg(f"✅ [PAPER FUTUROS] Cerradas {len(posiciones)} posiciones")
+                        tg(f"✅ [TRADING FUTUROS] Cerradas {len(posiciones)} posiciones")
                 except Exception as e:
                     tg(f"⚠️ Error cerrando futuros: {e}")
 
             elif texto == '/fut_ayuda':
                 tg(
-                    "📄 <b>Comandos Paper Futuros:</b>\n\n"
+                    "📄 <b>Comandos Trading Futuros:</b>\n\n"
                     "/fut_estado — posiciones abiertas y balance\n"
                     "/fut_stats — estadísticas completas\n"
                     "/fut_cerrar — cerrar todas las posiciones\n"
