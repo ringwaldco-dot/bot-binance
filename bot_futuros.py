@@ -29,12 +29,12 @@ TELEGRAM_CHAT_ID  = "1576867878"
 PAPER_BALANCE     = 1000.0    # USDT virtuales
 APALANCAMIENTO    = 5         # 5x — conservador para empezar
 MONTO_POR_TRADE   = 200.0     # USDT por posición (con apalancamiento = $1000 de exposición)
-MAX_POSICIONES    = 2         # máximo 2 posiciones abiertas simultáneas
-STOP_LOSS         = 0.025     # -2.5% sobre precio (con 5x = -12.5% del margen)
-TAKE_PROFIT       = 0.030     # +3% sobre precio (con 5x = +15% del margen)
+MAX_POSICIONES    = 3         # máximo 3 posiciones abiertas simultáneas
+STOP_LOSS         = 0.025     # -2.5% sobre precio
+TAKE_PROFIT       = 0.030     # +3% sobre precio
 TRAILING_TRIGGER  = 0.020     # activar trailing cuando gana +2%
 TRAILING_DIST     = 0.010     # distancia del trailing +1%
-CICLO_SCAN        = 20        # segundos entre scans
+CICLO_SCAN        = 10        # segundos entre scans
 CICLO_POSICIONES  = 10        # segundos entre revisión de posiciones
 
 PAPER_FILE        = "paper_futuros.json"
@@ -44,7 +44,11 @@ PARES_FUTUROS = [
     'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
     'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
     'MATICUSDT', 'LTCUSDT', 'ATOMUSDT', 'NEARUSDT', 'APTUSDT',
-    'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'SEIUSDT'
+    'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'SEIUSDT',
+    'FTMUSDT', 'SANDUSDT', 'MANAUSDT', 'GALAUSDT', 'APEUSDT',
+    'GMTUSDT', 'HBARUSDT', 'ALGOUSDT', 'VETUSDT', 'ICPUSDT',
+    'FILUSDT', 'RUNEUSDT', 'THETAUSDT', 'EGLDUSDT', 'FLOWUSDT',
+    'AXSUSDT', 'ENJUSDT', 'CHZUSDT', 'ZILUSDT', 'ONTUSDT'
 ]
 
 client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -315,8 +319,8 @@ def analizar_par(par):
             score_short += 1
             razones_short.append("Tendencia 1h bajista")
 
-        # Necesitamos al menos score 4 para entrar
-        if score_long >= 4 and score_long > score_short:
+        # Necesitamos al menos score 3 para entrar
+        if score_long >= 3 and score_long > score_short:
             return {
                 'direccion': 'LONG',
                 'confianza': min(score_long, 10),
@@ -325,7 +329,7 @@ def analizar_par(par):
                 'vol_ratio': round(vol_ratio, 2),
                 'razon': ' | '.join(razones_long[:3])
             }
-        elif score_short >= 4 and score_short > score_long:
+        elif score_short >= 3 and score_short > score_long:
             return {
                 'direccion': 'SHORT',
                 'confianza': min(score_short, 10),
