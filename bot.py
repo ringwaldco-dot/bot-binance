@@ -31,8 +31,8 @@ GEMINI_API_KEY   = os.getenv('GEMINI_API_KEY')
 TELEGRAM_TOKEN   = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
 TELEGRAM_CHAT_ID = "1576867878"
 
-MONTO_POR_TRADE  = 25.0     # usar la mayor parte del capital disponible
-MONTO_MIN        = 6.0      # mínimo para operar
+MONTO_POR_TRADE  = 200.0     # usar la mayor parte del capital disponible
+MONTO_MIN        = 20.0      # mínimo para operar
 MAX_POSICIONES   = 1        # solo 1 posición — concentrar capital
 STOP_LOSS        = 0.030    # -3% stop loss — dar tiempo al precio
 TRAILING_BASE    = 0.004    # trailing mínimo 0.4%
@@ -57,7 +57,7 @@ RANKING_FILE   = "ranking_pares.json"
 # PAPER TRADING
 # ============================================================
 PAPER_MODE    = True          # True = simulación, False = dinero real
-PAPER_BALANCE = 100.0         # USDT simulados para empezar
+PAPER_BALANCE = 500.0         # USDT simulados para empezar
 PAPER_FILE    = "paper_trades.json"
 
 def cargar_paper():
