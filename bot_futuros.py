@@ -573,10 +573,13 @@ def escanear_mercado():
             señal['par'] = par
             señales.append(señal)
             print(f"  [FUT] ✨ {par} {señal['direccion']} confianza:{señal['confianza']} — {señal['razon']}")
+        else:
+            print(f"  [FUT] — {par} sin señal")
         time.sleep(0.1)
 
     if not señales:
         print(f"  [FUT] Sin señales")
+        tg(f"🔍 <b>[FUT]</b> Scan completo — sin señales en {len(PARES_FUTUROS)} pares")
         return
 
     # Ordenar por confianza y tomar la mejor
