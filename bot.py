@@ -222,20 +222,6 @@ def procesar_comandos():
                         msg += f"{emoji} {par}: {d.get('score',50)}/100 | {d.get('ops',0)} ops | {d.get('pct_total',0):+.2f}%\n"
                     tg(msg)
 
-            elif texto == '/ayuda':
-                modo_str = "📄 PAPER TRADING (simulación)" if PAPER_MODE else "💰 REAL"
-                tg(
-                    f"🤖 <b>Comandos disponibles:</b>\n"
-                    f"Modo: {modo_str}\n\n"
-                    "/estado — ver capital y posiciones\n"
-                    "/vender_todo — vender todas las posiciones\n"
-                    "/reset_historial — limpiar historial\n"
-                    "/ranking — ver ranking de pares\n"
-                    "/paper_stats — estadísticas de paper trading\n"
-                    "/paper_reset — reiniciar paper trading\n"
-                    "/ayuda — ver esta lista"
-                )
-
             elif texto == '/paper_stats':
                 if not PAPER_MODE:
                     tg("⚠️ El bot no está en modo paper trading")
@@ -271,6 +257,150 @@ def procesar_comandos():
                     continue
                 guardar_paper({"balance": PAPER_BALANCE, "posiciones": [], "historial": [], "balance_inicial": PAPER_BALANCE})
                 tg(f"🔄 Paper trading reseteado — Balance: ${PAPER_BALANCE:.2f} USDT simulados")
+
+            # ---- COMANDOS FUTUROS ----
+            elif texto == '/fut_estado':
+                try:
+                    with open('paper_futuros.json') as f:
+                        data_fut = json.load(f)
+                except:
+                    data_fut = {"balance": 1000.0, "posiciones": [], "historial": [], "balance_inicial": 1000.0, "margen_usado": 0}
+                posiciones = data_fut.get('posiciones', [])
+                balance = data_fut.get('balance', 0)
+                balance_inicial = data_fut.get('balance_inicial', 1000.0)
+                pnl_abierto = 0
+                pos_str = ""
+                for p in posiciones:
+                    try:
+                        r = requests.get(f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={p['par']}", timeout=5)
+                        p_actual = float(r.json()['price'])
+                        if p['direccion'] == 'LONG':
+                            pct = ((p_actual - p['precio_entrada']) / p['precio_entrada']) * 100
+                        else:
+                            pct = ((p['precio_entrada'] - p_actual) / p['precio_entrada']) * 100
+                        pnl = pct / 100 * p['margen'] * p['apalancamiento']
+                        pnl_abierto += pnl
+                        dir_emoji = "📈" if p['direccion'] == 'LONG' else "📉"
+                        pos_str += f"\n{dir_emoji} {p['par']} {p['direccion']} {pct:+.2f}% (margen {pct*p['apalancamiento']:+.1f}%)"
+                    except:
+                        pass
+                balance_total = balance + pnl_abierto
+                rendimiento = ((balance_total - balance_inicial) / balance_inicial) * 100
+                tg(
+                    f"📄 <b>[PAPER FUTUROS] Estado</b>\n"
+                    f"💵 Balance libre: ${balance:.2f}\n"
+                    f"📊 PnL abierto: ${pnl_abierto:+.4f}\n"
+                    f"💰 Total: ${balance_total:.2f} ({rendimiento:+.2f}%)\n"
+                    f"📂 Posiciones: {len(posiciones)}"
+                    + (pos_str if pos_str else "\nSin posiciones abiertas")
+                )
+
+            elif texto == '/fut_stats':
+                try:
+                    with open('paper_futuros.json') as f:
+                        data_fut = json.load(f)
+                except:
+                    data_fut = {"balance": 1000.0, "posiciones": [], "historial": [], "balance_inicial": 1000.0, "margen_usado": 0}
+                historial_fut = data_fut.get('historial', [])
+                balance = data_fut.get('balance', 0)
+                balance_inicial = data_fut.get('balance_inicial', 1000.0)
+                ganancias_f = [op for op in historial_fut if op.get('pnl_usdt', 0) > 0]
+                perdidas_f  = [op for op in historial_fut if op.get('pnl_usdt', 0) <= 0]
+                win_rate_f  = (len(ganancias_f) / len(historial_fut) * 100) if historial_fut else 0
+                pnl_total_f = sum(op.get('pnl_usdt', 0) for op in historial_fut)
+                balance_total = balance + pnl_total_f
+                rendimiento = ((balance + pnl_total_f - balance_inicial) / balance_inicial) * 100
+                ultimas = historial_fut[-5:] if historial_fut else []
+                ops_str = ""
+                for op in reversed(ultimas):
+                    emoji = "✅" if op.get('pnl_usdt', 0) > 0 else "🔴"
+                    dir_emoji = "📈" if op.get('direccion') == 'LONG' else "📉"
+                    ops_str += f"\n{emoji} {dir_emoji} {op['par']} {op.get('pct', 0):+.2f}% ({op.get('pnl_usdt', 0):+.2f} USDT)"
+                tg(
+                    f"📄 <b>Paper Futuros — Resultados</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💵 Balance inicial: ${balance_inicial:.2f}\n"
+                    f"💰 Balance actual: ${balance:.2f}\n"
+                    f"📈 Rendimiento: {rendimiento:+.2f}%\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔢 Operaciones: {len(historial_fut)}\n"
+                    f"✅ Ganancias: {len(ganancias_f)}\n"
+                    f"🔴 Pérdidas: {len(perdidas_f)}\n"
+                    f"🎯 Win rate: {win_rate_f:.1f}%\n"
+                    f"💵 P&L total: {pnl_total_f:+.2f} USDT\n"
+                    + (f"\n<b>Últimas ops:</b>{ops_str}" if ops_str else "")
+                )
+
+            elif texto == '/fut_reset':
+                with open('paper_futuros.json', 'w') as f:
+                    json.dump({"balance": 1000.0, "balance_inicial": 1000.0, "posiciones": [], "historial": [], "margen_usado": 0.0}, f, indent=2)
+                tg("🔄 Paper Futuros reseteado — Balance: $1000.00 USDT")
+
+            elif texto == '/fut_cerrar':
+                try:
+                    with open('paper_futuros.json') as f:
+                        data_fut = json.load(f)
+                    posiciones = list(data_fut.get('posiciones', []))
+                    if not posiciones:
+                        tg("📄 [PAPER FUTUROS] Sin posiciones abiertas")
+                    else:
+                        for pos in posiciones:
+                            try:
+                                r = requests.get(f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={pos['par']}", timeout=5)
+                                p_actual = float(r.json()['price'])
+                                if pos['direccion'] == 'LONG':
+                                    pct = ((p_actual - pos['precio_entrada']) / pos['precio_entrada']) * 100
+                                else:
+                                    pct = ((pos['precio_entrada'] - p_actual) / pos['precio_entrada']) * 100
+                                pnl = pct / 100 * pos['margen'] * pos['apalancamiento']
+                                data_fut['balance'] = round(data_fut['balance'] + pos['margen'] + pnl, 4)
+                                data_fut['historial'].append({
+                                    'par': pos['par'], 'direccion': pos['direccion'],
+                                    'precio_entrada': pos['precio_entrada'], 'precio_cierre': p_actual,
+                                    'margen': pos['margen'], 'apalancamiento': pos['apalancamiento'],
+                                    'pct': round(pct, 3), 'pnl_usdt': round(pnl, 4),
+                                    'razon_cierre': 'comando_manual',
+                                    'fecha_apertura': pos['fecha'],
+                                    'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                })
+                            except:
+                                pass
+                        data_fut['posiciones'] = []
+                        data_fut['margen_usado'] = 0
+                        with open('paper_futuros.json', 'w') as f:
+                            json.dump(data_fut, f, indent=2)
+                        tg(f"✅ [PAPER FUTUROS] Cerradas {len(posiciones)} posiciones")
+                except Exception as e:
+                    tg(f"⚠️ Error cerrando futuros: {e}")
+
+            elif texto == '/fut_ayuda':
+                tg(
+                    "📄 <b>Comandos Paper Futuros:</b>\n\n"
+                    "/fut_estado — posiciones abiertas y balance\n"
+                    "/fut_stats — estadísticas completas\n"
+                    "/fut_cerrar — cerrar todas las posiciones\n"
+                    "/fut_reset — reiniciar simulador\n"
+                    "/fut_ayuda — esta lista"
+                )
+
+            elif texto == '/ayuda':
+                modo_str = "📄 PAPER TRADING (simulación)" if PAPER_MODE else "💰 REAL"
+                tg(
+                    f"🤖 <b>Todos los comandos:</b>\n"
+                    f"Modo spot: {modo_str}\n\n"
+                    "<b>— SPOT —</b>\n"
+                    "/estado — capital y posiciones spot\n"
+                    "/paper_stats — estadísticas spot\n"
+                    "/paper_reset — reiniciar paper spot\n"
+                    "/ranking — ranking de pares\n"
+                    "/vender_todo — cerrar posiciones spot\n\n"
+                    "<b>— FUTUROS —</b>\n"
+                    "/fut_estado — posiciones y balance futuros\n"
+                    "/fut_stats — estadísticas futuros\n"
+                    "/fut_cerrar — cerrar posiciones futuros\n"
+                    "/fut_reset — reiniciar paper futuros\n"
+                    "/fut_ayuda — ayuda futuros\n"
+                )
     except Exception as e:
         print(f"  [CMD] Error: {e}")
 
