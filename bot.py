@@ -53,6 +53,60 @@ HISTORIAL_FILE = "historial_binance.json"
 BLACKLIST_FILE = "blacklist.json"
 RANKING_FILE   = "ranking_pares.json"
 
+# ============================================================
+# PAPER TRADING
+# ============================================================
+PAPER_MODE    = True          # True = simulación, False = dinero real
+PAPER_BALANCE = 100.0         # USDT simulados para empezar
+PAPER_FILE    = "paper_trades.json"
+
+def cargar_paper():
+    if os.path.exists(PAPER_FILE):
+        with open(PAPER_FILE) as f:
+            return json.load(f)
+    return {"balance": PAPER_BALANCE, "posiciones": [], "historial": [], "balance_inicial": PAPER_BALANCE}
+
+def guardar_paper(data):
+    with open(PAPER_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def paper_stats():
+    """Calcula estadísticas del paper trading."""
+    data = cargar_paper()
+    historial = data.get("historial", [])
+    posiciones = data.get("posiciones", [])
+    balance = data.get("balance", PAPER_BALANCE)
+    balance_inicial = data.get("balance_inicial", PAPER_BALANCE)
+
+    # Valor actual de posiciones abiertas
+    valor_posiciones = 0
+    for pos in posiciones:
+        p_actual = precio(pos['par'])
+        if p_actual:
+            valor_posiciones += p_actual * pos['cantidad']
+
+    balance_total = balance + valor_posiciones
+    rendimiento = ((balance_total - balance_inicial) / balance_inicial) * 100
+
+    ganancias = [op for op in historial if op.get('ganancia_pct', 0) > 0]
+    perdidas  = [op for op in historial if op.get('ganancia_pct', 0) <= 0]
+    win_rate  = (len(ganancias) / len(historial) * 100) if historial else 0
+    pct_total = sum(op.get('ganancia_pct', 0) for op in historial)
+
+    return {
+        "balance_libre": balance,
+        "valor_posiciones": valor_posiciones,
+        "balance_total": balance_total,
+        "balance_inicial": balance_inicial,
+        "rendimiento": rendimiento,
+        "ops_totales": len(historial),
+        "ganancias": len(ganancias),
+        "perdidas": len(perdidas),
+        "win_rate": win_rate,
+        "pct_total": pct_total,
+        "posiciones_abiertas": len(posiciones),
+    }
+
 # Clientes
 client_binance = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 genai.configure(api_key=GEMINI_API_KEY)
@@ -123,16 +177,34 @@ def procesar_comandos():
                 tg(f"✅ Vendidas {vendidas} posiciones\n💰 Capital libre: ${cap:.2f} USDT")
 
             elif texto == '/estado':
-                historial = cargar_historial()
-                abiertas = [p for p in historial if p.get('estado') == 'abierta']
-                cap = capital_usdt()
-                pos_str = ""
-                for p in abiertas:
-                    p_actual = precio(p['par'])
-                    if p_actual:
-                        pct = ((p_actual - float(p['precio_compra'])) / float(p['precio_compra'])) * 100
-                        pos_str += f"\n• {p['par']} {pct:+.2f}%"
-                tg(f"📊 <b>Estado del bot</b>\n💰 Capital: ${cap:.2f}\n📂 Abiertas: {len(abiertas)}{pos_str}")
+                if PAPER_MODE:
+                    data = cargar_paper()
+                    posiciones = data.get('posiciones', [])
+                    stats = paper_stats()
+                    pos_str = ""
+                    for p in posiciones:
+                        p_actual = precio(p['par'])
+                        if p_actual:
+                            pct = ((p_actual - float(p['precio_compra'])) / float(p['precio_compra'])) * 100
+                            pos_str += f"\n• {p['par']} {pct:+.2f}%"
+                    tg(
+                        f"📄 <b>[PAPER] Estado del bot</b>\n"
+                        f"💵 Balance libre: ${stats['balance_libre']:.2f}\n"
+                        f"📊 Posiciones: ${stats['valor_posiciones']:.2f}\n"
+                        f"💰 Total: ${stats['balance_total']:.2f} ({stats['rendimiento']:+.2f}%)\n"
+                        f"📂 Abiertas: {stats['posiciones_abiertas']}{pos_str}"
+                    )
+                else:
+                    historial = cargar_historial()
+                    abiertas = [p for p in historial if p.get('estado') == 'abierta']
+                    cap = capital_usdt()
+                    pos_str = ""
+                    for p in abiertas:
+                        p_actual = precio(p['par'])
+                        if p_actual:
+                            pct = ((p_actual - float(p['precio_compra'])) / float(p['precio_compra'])) * 100
+                            pos_str += f"\n• {p['par']} {pct:+.2f}%"
+                    tg(f"📊 <b>Estado del bot</b>\n💰 Capital: ${cap:.2f}\n📂 Abiertas: {len(abiertas)}{pos_str}")
 
             elif texto == '/reset_historial':
                 guardar_historial([])
@@ -151,14 +223,54 @@ def procesar_comandos():
                     tg(msg)
 
             elif texto == '/ayuda':
+                modo_str = "📄 PAPER TRADING (simulación)" if PAPER_MODE else "💰 REAL"
                 tg(
-                    "🤖 <b>Comandos disponibles:</b>\n"
+                    f"🤖 <b>Comandos disponibles:</b>\n"
+                    f"Modo: {modo_str}\n\n"
                     "/estado — ver capital y posiciones\n"
                     "/vender_todo — vender todas las posiciones\n"
                     "/reset_historial — limpiar historial\n"
                     "/ranking — ver ranking de pares\n"
+                    "/paper_stats — estadísticas de paper trading\n"
+                    "/paper_reset — reiniciar paper trading\n"
                     "/ayuda — ver esta lista"
                 )
+
+            elif texto == '/paper_stats':
+                if not PAPER_MODE:
+                    tg("⚠️ El bot no está en modo paper trading")
+                    continue
+                stats = paper_stats()
+                data = cargar_paper()
+                historial_paper = data.get('historial', [])
+                ultimas = historial_paper[-5:] if historial_paper else []
+                ops_str = ""
+                for op in reversed(ultimas):
+                    emoji = "✅" if op.get('ganancia_pct', 0) > 0 else "🔴"
+                    ops_str += f"\n{emoji} {op['par']} {op.get('ganancia_pct', 0):+.2f}% ({op.get('ganancia_usdt', 0):+.4f} USDT)"
+                tg(
+                    f"📄 <b>Paper Trading — Resultados</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💵 Balance inicial: ${stats['balance_inicial']:.2f}\n"
+                    f"💰 Balance actual: ${stats['balance_total']:.2f}\n"
+                    f"📈 Rendimiento: {stats['rendimiento']:+.2f}%\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔢 Operaciones: {stats['ops_totales']}\n"
+                    f"✅ Ganancias: {stats['ganancias']}\n"
+                    f"🔴 Pérdidas: {stats['perdidas']}\n"
+                    f"🎯 Win rate: {stats['win_rate']:.1f}%\n"
+                    f"📊 P&L acumulado: {stats['pct_total']:+.2f}%\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📂 Posiciones abiertas: {stats['posiciones_abiertas']}\n"
+                    + (f"\n<b>Últimas ops:</b>{ops_str}" if ops_str else "")
+                )
+
+            elif texto == '/paper_reset':
+                if not PAPER_MODE:
+                    tg("⚠️ El bot no está en modo paper trading")
+                    continue
+                guardar_paper({"balance": PAPER_BALANCE, "posiciones": [], "historial": [], "balance_inicial": PAPER_BALANCE})
+                tg(f"🔄 Paper trading reseteado — Balance: ${PAPER_BALANCE:.2f} USDT simulados")
     except Exception as e:
         print(f"  [CMD] Error: {e}")
 
@@ -249,6 +361,8 @@ def precio(par):
         return None
 
 def capital_usdt():
+    if PAPER_MODE:
+        return cargar_paper().get('balance', 0)
     try:
         for b in client_binance.get_account()['balances']:
             if b['asset'] == 'USDT':
@@ -267,6 +381,29 @@ def balance_asset(asset):
         return 0
 
 def comprar(par, monto):
+    if PAPER_MODE:
+        try:
+            precio_c = precio(par)
+            if not precio_c:
+                return False, 0, 0
+            data = cargar_paper()
+            if data['balance'] < monto:
+                print(f"  [PAPER] Sin balance suficiente (${data['balance']:.2f} < ${monto})")
+                return False, 0, 0
+            qty = monto / precio_c
+            data['balance'] = round(data['balance'] - monto, 4)
+            data['posiciones'].append({
+                'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                'cantidad': qty, 'monto': monto,
+                'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            guardar_paper(data)
+            print(f"  📄 [PAPER] COMPRA {par} qty:{qty:.6f} precio:${precio_c} monto:${monto}")
+            tg(f"📄 <b>[PAPER] COMPRA</b> {par}\n💰 ${precio_c:.6f} | ${monto:.2f}\n💵 Balance: ${data['balance']:.2f}")
+            return True, qty, precio_c
+        except Exception as e:
+            print(f"  ❌ [PAPER] Error comprando {par}: {e}")
+            return False, 0, 0
     try:
         orden = client_binance.order_market_buy(symbol=par, quoteOrderQty=monto)
         qty = float(orden['executedQty'])
@@ -279,6 +416,46 @@ def comprar(par, monto):
         return False, 0, 0
 
 def vender(par, cantidad, pct, razon):
+    if PAPER_MODE:
+        try:
+            precio_v = precio(par)
+            if not precio_v:
+                return False
+            data = cargar_paper()
+            # Buscar posición abierta
+            pos_idx = next((i for i, p in enumerate(data['posiciones']) if p['par'] == par), None)
+            if pos_idx is None:
+                print(f"  [PAPER] {par} no encontrada en posiciones — marcando cerrada")
+                return 'sin_balance'
+            pos = data['posiciones'][pos_idx]
+            qty = pos['cantidad']
+            monto_venta = qty * precio_v
+            ganancia_usdt = monto_venta - pos['monto']
+            pct_real = ((precio_v - pos['precio_compra']) / pos['precio_compra']) * 100
+
+            data['balance'] = round(data['balance'] + monto_venta, 4)
+            data['posiciones'].pop(pos_idx)
+            data['historial'].append({
+                'par': par,
+                'precio_compra': pos['precio_compra'],
+                'precio_venta': precio_v,
+                'cantidad': qty,
+                'monto': pos['monto'],
+                'ganancia_pct': round(pct_real, 3),
+                'ganancia_usdt': round(ganancia_usdt, 4),
+                'razon_cierre': razon,
+                'fecha_compra': pos['fecha'],
+                'fecha_cierre': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            guardar_paper(data)
+            emoji = '✅' if pct_real > 0 else '🔴'
+            print(f"  📄 [PAPER] VENTA {par} {pct_real:+.3f}% | ${ganancia_usdt:+.4f} USDT | {razon}")
+            tg(f"📄 {emoji} <b>[PAPER] VENTA</b> {par}\n{pct_real:+.3f}% | {ganancia_usdt:+.4f} USDT | {razon}\n💵 Balance: ${data['balance']:.2f}")
+            actualizar_ranking(par, pct_real)
+            return True
+        except Exception as e:
+            print(f"  ❌ [PAPER] Error vendiendo {par}: {e}")
+            return False
     try:
         asset = par.replace('USDT', '')
         info = client_binance.get_symbol_info(par)
@@ -425,6 +602,53 @@ def sincronizar():
 
 def revisar_posiciones():
     """Revisa todas las posiciones abiertas y vende si corresponde."""
+    if PAPER_MODE:
+        data = cargar_paper()
+        posiciones = data.get('posiciones', [])
+        if not posiciones:
+            return
+        ahora = datetime.now()
+        for pos in list(posiciones):
+            p_actual = precio(pos['par'])
+            if not p_actual:
+                continue
+            p_compra = float(pos['precio_compra'])
+            p_max = float(pos.get('precio_maximo', p_compra))
+            if p_actual > p_max:
+                pos['precio_maximo'] = p_actual
+                p_max = p_actual
+                # guardar actualización de máximo
+                data = cargar_paper()
+                for pp in data['posiciones']:
+                    if pp['par'] == pos['par']:
+                        pp['precio_maximo'] = p_actual
+                guardar_paper(data)
+
+            pct = round(((p_actual - p_compra) / p_compra) * 100, 3)
+            caida = (p_max - p_actual) / p_max if p_max > 0 else 0
+            try:
+                fecha = datetime.strptime(pos['fecha'], "%Y-%m-%d %H:%M:%S")
+                minutos = (ahora - fecha).total_seconds() / 60
+            except:
+                minutos = 0
+            trail = trailing(pct, minutos)
+            print(f"  {pos['par']} | {pct:+.3f}% | trail:{trail*100:.1f}% | {minutos:.0f}min [PAPER]")
+
+            if pct <= -STOP_LOSS * 100:
+                vender(pos['par'], pos.get('cantidad', 0), pct, "stop_loss")
+                continue
+            tp_min = MIN_GANANCIA_TRAIL * 100
+            if pct >= tp_min and caida >= trail:
+                vender(pos['par'], pos.get('cantidad', 0), pct, f"trailing_max:{((p_max-p_compra)/p_compra)*100:.2f}%")
+                continue
+            if minutos >= MINUTOS_ESTANCADO and abs(pct) <= RANGO_ESTANCADO * 100 and pct < 0.3:
+                vender(pos['par'], pos.get('cantidad', 0), pct, f"estancada_{minutos:.0f}min")
+                tg(f"⏱️ <b>[PAPER] LIBERADA</b> {pos['par']}\n{pct:+.2f}% en {minutos:.0f}min sin movimiento")
+                continue
+            if minutos >= 60 and pct <= -2.0:
+                vender(pos['par'], pos.get('cantidad', 0), pct, f"cut_loss_{minutos:.0f}min")
+        return
+
     historial = cargar_historial()
     abiertas = [p for p in historial if p.get('estado') == 'abierta']
     if not abiertas:
@@ -1134,8 +1358,14 @@ def thread_pumps():
     print("  [PUMP] Thread iniciado ✓")
     while True:
         try:
-            historial = cargar_historial()
-            abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
+            if PAPER_MODE:
+                data = cargar_paper()
+                abiertas = len(data.get('posiciones', []))
+                pares_activos_pump = {p['par'] for p in data.get('posiciones', [])}
+            else:
+                historial = cargar_historial()
+                abiertas = len([p for p in historial if p.get('estado') == 'abierta'])
+                pares_activos_pump = {p['par'] for p in historial if p.get('estado') == 'abierta'}
 
             if abiertas >= MAX_POSICIONES:
                 time.sleep(CICLO_PUMP)
@@ -1151,11 +1381,10 @@ def thread_pumps():
             print(f"  [PUMP] {par} +{mejor['c5m']}% Vol:{mejor['ratio_vol']}x RSI:{mejor['rsi']}")
 
             # Verificar que no esté ya en uso
-            pares_activos = {p['par'] for p in historial if p.get('estado') == 'abierta'}
-            if par in pares_activos or en_blacklist(par):
+            if par in pares_activos_pump or en_blacklist(par):
                 # Intentar con el siguiente
                 for p in pumps[1:]:
-                    if p['par'] not in pares_activos and not en_blacklist(p['par']):
+                    if p['par'] not in pares_activos_pump and not en_blacklist(p['par']):
                         mejor = p
                         par = p['par']
                         break
@@ -1208,15 +1437,16 @@ def thread_pumps():
 
             exito, cantidad, precio_c = comprar(par, monto)
             if exito:
-                historial = cargar_historial()
-                historial.append({
-                    'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
-                    'cantidad': cantidad, 'monto': monto,
-                    'estado': 'abierta', 'estrategia': 'pump',
-                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
-                guardar_historial(historial)
-                tg(f"🚀 <b>PUMP COMPRADO</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x\n💰 ${monto:.2f}")
+                if not PAPER_MODE:
+                    historial = cargar_historial()
+                    historial.append({
+                        'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                        'cantidad': cantidad, 'monto': monto,
+                        'estado': 'abierta', 'estrategia': 'pump',
+                        'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    guardar_historial(historial)
+                tg(f"🚀 <b>{'[PAPER] ' if PAPER_MODE else ''}PUMP COMPRADO</b> {par}\n+{mejor['c5m']}% | Vol {mejor['ratio_vol']}x\n💰 ${monto:.2f}")
 
         except Exception as e:
             print(f"  [PUMP] Error: {e}")
@@ -1354,16 +1584,17 @@ def scalp_candidatos(historial, cap):
 
             exito, cantidad, precio_c = comprar(par, monto)
             if exito:
-                h = cargar_historial()
-                h.append({
-                    'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
-                    'cantidad': cantidad, 'monto': monto,
-                    'estado': 'abierta', 'estrategia': 'scalp',
-                    'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
-                guardar_historial(h)
+                if not PAPER_MODE:
+                    h = cargar_historial()
+                    h.append({
+                        'par': par, 'precio_compra': precio_c, 'precio_maximo': precio_c,
+                        'cantidad': cantidad, 'monto': monto,
+                        'estado': 'abierta', 'estrategia': 'scalp',
+                        'fecha': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    guardar_historial(h)
                 cap -= monto
-                tg(f"📈 <b>SCALP</b> {par}\nRSI:{rsi:.1f} | Gemini:{analisis.get('confianza')}/10\n💰 ${monto:.2f}")
+                tg(f"📈 <b>{'[PAPER] ' if PAPER_MODE else ''}SCALP</b> {par}\nRSI:{rsi:.1f} | Gemini:{analisis.get('confianza')}/10\n💰 ${monto:.2f}")
             time.sleep(0.3)
         except:
             continue
@@ -1378,11 +1609,21 @@ MONITOR_CICLO = 0
 def main():
     global SINC_CICLO
     print(f"\n{'='*50}")
-    print(f"  BOT v6 — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+    print(f"  BOT v6 — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC {'[PAPER]' if PAPER_MODE else '[REAL]'}")
     cap = capital_usdt()
-    historial = cargar_historial()
-    abiertas = [p for p in historial if p.get('estado') == 'abierta']
-    print(f"  Capital: ${cap:.2f} | Abiertas: {len(abiertas)}")
+
+    if PAPER_MODE:
+        data = cargar_paper()
+        abiertas_count = len(data.get('posiciones', []))
+        pares_activos = {p['par'] for p in data.get('posiciones', [])}
+        historial = cargar_historial()  # para funciones que lo necesitan
+    else:
+        historial = cargar_historial()
+        abiertas = [p for p in historial if p.get('estado') == 'abierta']
+        abiertas_count = len(abiertas)
+        pares_activos = {p['par'] for p in abiertas}
+
+    print(f"  Capital: ${cap:.2f} | Abiertas: {abiertas_count}")
     print(f"{'='*50}")
 
     # Sincronización deshabilitada — causa rebalanceos con posiciones externas
@@ -1391,13 +1632,20 @@ def main():
     # Revisar posiciones
     revisar_posiciones()
 
-    # Recargar historial actualizado
-    historial = cargar_historial()
-    abiertas = [p for p in historial if p.get('estado') == 'abierta']
-    pares_activos = {p['par'] for p in abiertas}
-    cap = capital_usdt()
+    # Recargar estado actualizado
+    if PAPER_MODE:
+        data = cargar_paper()
+        abiertas_count = len(data.get('posiciones', []))
+        pares_activos = {p['par'] for p in data.get('posiciones', [])}
+        cap = capital_usdt()
+    else:
+        historial = cargar_historial()
+        abiertas = [p for p in historial if p.get('estado') == 'abierta']
+        abiertas_count = len(abiertas)
+        pares_activos = {p['par'] for p in abiertas}
+        cap = capital_usdt()
 
-    if len(abiertas) >= MAX_POSICIONES or cap < MONTO_MIN:
+    if abiertas_count >= MAX_POSICIONES or cap < MONTO_MIN:
         return
 
     # MONITOR — cada 5 ciclos (~7.5 min)
@@ -1472,19 +1720,20 @@ def main():
             print(f"  Error scalping: {e}")
 
 if __name__ == "__main__":
+    modo_inicio = "📄 PAPER TRADING — $100 USDT virtuales" if PAPER_MODE else "💰 MODO REAL"
     tg(
-        "🤖 <b>Bot Binance v6</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🌍 Sin restricciones horarias — 24/7\n"
-        "🚀 Pump detector: ciclo 15s\n"
-        "📈 Scalping + Monitor + Listings 24/7\n"
-        "📰 Noticias en tiempo real (RSS)\n"
-        "🔄 Loop principal: ciclo 90s\n"
-        "📊 Trailing inteligente activo\n"
-        "🔄 Rebalanceo automático\n"
-        "⏱️ Libera posiciones estancadas 45min\n"
-        "🧠 Memoria y ranking de pares\n"
-        "🤖 IA: Gemini 2.0 Flash"
+        f"🤖 <b>Bot Binance v6</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚙️ {modo_inicio}\n"
+        f"🌍 Sin restricciones horarias — 24/7\n"
+        f"🚀 Pump detector: ciclo 15s\n"
+        f"📈 Scalping + Monitor + Listings 24/7\n"
+        f"📰 Noticias en tiempo real (RSS)\n"
+        f"🔄 Loop principal: ciclo 90s\n"
+        f"📊 Trailing inteligente activo\n"
+        f"🧠 Memoria y ranking de pares\n"
+        f"🤖 IA: Gemini 2.0 Flash\n"
+        f"📊 /paper_stats para ver resultados"
     )
     # sincronizar()  # DESHABILITADO — causa rebalanceos innecesarios
     threading.Thread(target=iniciar_dashboard, daemon=True).start()
