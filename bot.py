@@ -1850,7 +1850,7 @@ def main():
             print(f"  Error scalping: {e}")
 
 if __name__ == "__main__":
-    modo_inicio = "📄 PAPER TRADING — $100 USDT virtuales" if PAPER_MODE else "💰 MODO REAL"
+    modo_inicio = "📈 TRADING SPOT — $1000 USDT" if PAPER_MODE else "💰 MODO REAL"
     tg(
         f"🤖 <b>Bot Binance v6</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
