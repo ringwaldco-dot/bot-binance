@@ -754,9 +754,9 @@ def thread_comandos():
 
 if __name__ == "__main__":
     tg(
-        f"📄 <b>Bot Futuros — Trading Futuros</b>\n"
+        f"🚀 <b>Bot Trading Futuros</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💵 Balance: ${PAPER_BALANCE} USDT virtuales\n"
+        f"💵 Balance: ${PAPER_BALANCE} USDT\n"
         f"⚡ Apalancamiento: {APALANCAMIENTO}x\n"
         f"📊 Max posiciones: {MAX_POSICIONES}\n"
         f"💰 Monto por trade: ${MONTO_POR_TRADE} (exposición ${MONTO_POR_TRADE * APALANCAMIENTO})\n"
