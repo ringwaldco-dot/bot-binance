@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Bot Futuros Binance — Paper Trading
+# Bot Futuros Binance — Trading Futuros
 # Módulo separado para operar futuros USDT-M en simulación
 
 import os
@@ -385,7 +385,7 @@ def abrir_posicion(par, direccion, señal):
 
     emoji = '🟢' if direccion == 'LONG' else '🔴'
     tg(
-        f"📄 {emoji} <b>[PAPER FUTUROS] {direccion}</b> {par}\n"
+        f"📄 {emoji} <b>[TRADING FUTUROS] {direccion}</b> {par}\n"
         f"💰 Entrada: ${precio_entrada:.4f}\n"
         f"📊 Margen: ${margen} | Exposición: ${exposicion} ({APALANCAMIENTO}x)\n"
         f"🛑 SL: ${sl:.4f} | 🎯 TP: ${tp:.4f}\n"
@@ -439,7 +439,7 @@ def cerrar_posicion(pos, razon, precio_cierre=None):
     emoji = '✅' if pnl_usdt > 0 else '🔴'
     liquidada = ' ⚠️ LIQUIDADA' if razon == 'liquidacion' else ''
     tg(
-        f"📄 {emoji} <b>[PAPER FUTUROS] CIERRE{liquidada}</b> {pos['par']} {pos['direccion']}\n"
+        f"📄 {emoji} <b>[TRADING FUTUROS] CIERRE{liquidada}</b> {pos['par']} {pos['direccion']}\n"
         f"📊 {pct:+.2f}% | {pnl_usdt:+.4f} USDT\n"
         f"💰 Entrada: ${precio_entrada:.4f} → Cierre: ${precio_cierre:.4f}\n"
         f"📝 Razón: {razon}\n"
@@ -579,7 +579,7 @@ def escanear_mercado():
     señales.sort(key=lambda x: x['confianza'], reverse=True)
     mejor = señales[0]
 
-    tg(f"🔍 <b>[PAPER FUTUROS]</b> Señal detectada: {mejor['par']} {mejor['direccion']}\n{mejor['razon']}\nConfianza: {mejor['confianza']}/10")
+    tg(f"🔍 <b>[TRADING FUTUROS]</b> Señal detectada: {mejor['par']} {mejor['direccion']}\n{mejor['razon']}\nConfianza: {mejor['confianza']}/10")
     abrir_posicion(mejor['par'], mejor['direccion'], mejor)
 
 # ============================================================
@@ -615,7 +615,7 @@ def procesar_comandos():
                     dir_emoji = "📈" if op.get('direccion') == 'LONG' else "📉"
                     ops_str += f"\n{emoji} {dir_emoji} {op['par']} {op.get('pct', 0):+.2f}% ({op.get('pnl_usdt', 0):+.2f} USDT)"
                 tg(
-                    f"📄 <b>Paper Futuros — Resultados</b>\n"
+                    f"📄 <b>Trading Futuros — Resultados</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                     f"💵 Balance inicial: ${stats['balance_inicial']:.2f}\n"
                     f"💰 Balance actual: ${stats['balance_total']:.2f}\n"
@@ -648,7 +648,7 @@ def procesar_comandos():
                         dir_emoji = "📈" if p['direccion'] == 'LONG' else "📉"
                         pos_str += f"\n{dir_emoji} {p['par']} {p['direccion']} {pct:+.2f}% (margen {pnl:+.1f}%)"
                 tg(
-                    f"📄 <b>[PAPER FUTUROS] Estado</b>\n"
+                    f"📄 <b>[TRADING FUTUROS] Estado</b>\n"
                     f"💵 Balance libre: ${stats['balance_libre']:.2f}\n"
                     f"📊 PnL abierto: ${stats['pnl_abierto']:+.4f}\n"
                     f"💰 Total: ${stats['balance_total']:.2f} ({stats['rendimiento']:+.2f}%)\n"
@@ -660,13 +660,13 @@ def procesar_comandos():
                 data = cargar_paper()
                 posiciones = list(data.get('posiciones', []))
                 if not posiciones:
-                    tg("📄 [PAPER FUTUROS] Sin posiciones abiertas")
+                    tg("📄 [TRADING FUTUROS] Sin posiciones abiertas")
                     continue
                 cerradas = 0
                 for pos in posiciones:
                     if cerrar_posicion(pos, 'comando_manual'):
                         cerradas += 1
-                tg(f"📄 ✅ [PAPER FUTUROS] Cerradas {cerradas} posiciones")
+                tg(f"📄 ✅ [TRADING FUTUROS] Cerradas {cerradas} posiciones")
 
             elif texto == '/fut_reset':
                 guardar_paper({
@@ -676,11 +676,11 @@ def procesar_comandos():
                     "historial": [],
                     "margen_usado": 0.0
                 })
-                tg(f"🔄 Paper Futuros reseteado — Balance: ${PAPER_BALANCE:.2f} USDT")
+                tg(f"🔄 Trading Futuros reseteado — Balance: ${PAPER_BALANCE:.2f} USDT")
 
             elif texto == '/ayuda' or texto == '/fut_ayuda':
                 tg(
-                    "📄 <b>Comandos Paper Futuros:</b>\n\n"
+                    "📄 <b>Comandos Trading Futuros:</b>\n\n"
                     "/fut_estado — posiciones abiertas y balance\n"
                     "/fut_stats — estadísticas completas\n"
                     "/fut_cerrar — cerrar todas las posiciones\n"
@@ -704,7 +704,7 @@ def reporte_diario():
             ultima_hora = hora
             stats = paper_stats()
             tg(
-                f"📄 <b>Reporte diario — Paper Futuros</b>\n"
+                f"📄 <b>Reporte diario — Trading Futuros</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 Balance: ${stats['balance_total']:.2f} ({stats['rendimiento']:+.2f}%)\n"
                 f"🔢 Ops totales: {stats['ops_totales']}\n"
@@ -754,7 +754,7 @@ def thread_comandos():
 
 if __name__ == "__main__":
     tg(
-        f"📄 <b>Bot Futuros — Paper Trading</b>\n"
+        f"📄 <b>Bot Futuros — Trading Futuros</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💵 Balance: ${PAPER_BALANCE} USDT virtuales\n"
         f"⚡ Apalancamiento: {APALANCAMIENTO}x\n"
