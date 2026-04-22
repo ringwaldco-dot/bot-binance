@@ -1870,6 +1870,18 @@ if __name__ == "__main__":
     threading.Thread(target=thread_pumps, daemon=True).start()
     threading.Thread(target=thread_comandos, daemon=True).start()
     threading.Thread(target=thread_noticias, daemon=True).start()
+
+    # Lanzar bot de futuros en threads dentro del mismo proceso
+    try:
+        import bot_futuros
+        threading.Thread(target=bot_futuros.thread_scanner, daemon=True).start()
+        threading.Thread(target=bot_futuros.thread_posiciones, daemon=True).start()
+        threading.Thread(target=bot_futuros.reporte_diario, daemon=True).start()
+        print("  [FUT] Threads de futuros iniciados ✓")
+        tg("🚀 <b>Bot Trading Futuros</b> iniciado\n💵 $1000 USDT | 5x apalancamiento\n/fut_estado para ver estado")
+    except Exception as e:
+        print(f"  [FUT] Error iniciando futuros: {e}")
+
     print("  Threads iniciados ✓")
     while True:
         try:
