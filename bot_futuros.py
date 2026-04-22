@@ -319,24 +319,24 @@ def analizar_par(par):
             score_short += 1
             razones_short.append("Tendencia 1h bajista")
 
-        # Necesitamos al menos score 3 para entrar
-        if score_long >= 3 and score_long > score_short:
+        # Entrar con score 1 si hay señal clara en alguna dirección
+        if score_long >= 1 and score_long > score_short:
             return {
                 'direccion': 'LONG',
                 'confianza': min(score_long, 10),
                 'precio': p_actual,
                 'rsi': round(rsi, 1),
                 'vol_ratio': round(vol_ratio, 2),
-                'razon': ' | '.join(razones_long[:3])
+                'razon': ' | '.join(razones_long[:3]) if razones_long else f"RSI:{rsi:.0f} c15m:{c15m:+.1f}%"
             }
-        elif score_short >= 3 and score_short > score_long:
+        elif score_short >= 1 and score_short > score_long:
             return {
                 'direccion': 'SHORT',
                 'confianza': min(score_short, 10),
                 'precio': p_actual,
                 'rsi': round(rsi, 1),
                 'vol_ratio': round(vol_ratio, 2),
-                'razon': ' | '.join(razones_short[:3])
+                'razon': ' | '.join(razones_short[:3]) if razones_short else f"RSI:{rsi:.0f} c15m:{c15m:+.1f}%"
             }
 
         return None
