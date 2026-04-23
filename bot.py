@@ -336,9 +336,24 @@ def procesar_comandos():
                 )
 
             elif texto == '/fut_reset':
+                try:
+                    with open('paper_futuros.json') as f:
+                        data_fut = json.load(f)
+                    historial_existente = data_fut.get('historial', [])
+                    pnl_acumulado = sum(op.get('pnl_usdt', 0) for op in historial_existente)
+                    nuevo_balance = 1000.0 + pnl_acumulado
+                except:
+                    historial_existente = []
+                    nuevo_balance = 1000.0
                 with open('paper_futuros.json', 'w') as f:
-                    json.dump({"balance": 1000.0, "balance_inicial": 1000.0, "posiciones": [], "historial": [], "margen_usado": 0.0}, f, indent=2)
-                tg("🔄 Trading Futuros reseteado — Balance: $1000.00 USDT")
+                    json.dump({
+                        "balance": nuevo_balance,
+                        "balance_inicial": 1000.0,
+                        "posiciones": [],
+                        "historial": historial_existente,
+                        "margen_usado": 0.0
+                    }, f, indent=2)
+                tg(f"🔄 Posiciones cerradas — Balance: ${nuevo_balance:.2f} USDT\n📊 Historial conservado ({len(historial_existente)} ops)")
 
             elif texto == '/fut_cerrar':
                 try:
