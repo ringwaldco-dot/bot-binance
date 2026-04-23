@@ -134,7 +134,15 @@ def paper_stats():
 # PRECIO FUTUROS
 # ============================================================
 
-def precio_futuros(par):
+def calcular_monto(confianza, balance):
+    """Calcula el monto a invertir según la confianza de la señal."""
+    if confianza >= 8:
+        monto = 300.0   # señal muy fuerte
+    elif confianza >= 6:
+        monto = 200.0   # señal normal
+    else:
+        monto = 100.0   # señal débil — probar con poco
+    return min(monto, balance * 0.95)  # nunca más del 95% del balance libre
     try:
         r = requests.get(
             f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={par}",
@@ -352,7 +360,7 @@ def analizar_par(par):
 def abrir_posicion(par, direccion, señal):
     """Abre una posición simulada de futuros."""
     data = cargar_paper()
-    margen = MONTO_POR_TRADE
+    margen = calcular_monto(señal.get('confianza', 5), data['balance'])
     exposicion = margen * APALANCAMIENTO
 
     if data['balance'] < margen:
