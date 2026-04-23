@@ -302,14 +302,17 @@ def procesar_comandos():
                 except:
                     data_fut = {"balance": 1000.0, "posiciones": [], "historial": [], "balance_inicial": 1000.0, "margen_usado": 0}
                 historial_fut = data_fut.get('historial', [])
+                posiciones_fut = data_fut.get('posiciones', [])
                 balance = data_fut.get('balance', 0)
                 balance_inicial = data_fut.get('balance_inicial', 1000.0)
+                margen_usado = data_fut.get('margen_usado', 0)
                 ganancias_f = [op for op in historial_fut if op.get('pnl_usdt', 0) > 0]
                 perdidas_f  = [op for op in historial_fut if op.get('pnl_usdt', 0) <= 0]
                 win_rate_f  = (len(ganancias_f) / len(historial_fut) * 100) if historial_fut else 0
                 pnl_total_f = sum(op.get('pnl_usdt', 0) for op in historial_fut)
-                balance_total = balance + pnl_total_f
-                rendimiento = ((balance + pnl_total_f - balance_inicial) / balance_inicial) * 100
+                # Balance real = libre + margen en uso + ganancias cerradas
+                balance_real = balance + margen_usado
+                rendimiento = ((balance_real - balance_inicial) / balance_inicial) * 100
                 ultimas = historial_fut[-5:] if historial_fut else []
                 ops_str = ""
                 for op in reversed(ultimas):
@@ -320,14 +323,15 @@ def procesar_comandos():
                     f"📄 <b>Trading Futuros — Resultados</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                     f"💵 Balance inicial: ${balance_inicial:.2f}\n"
-                    f"💰 Balance actual: ${balance:.2f}\n"
+                    f"💰 Balance actual: ${balance_real:.2f}\n"
                     f"📈 Rendimiento: {rendimiento:+.2f}%\n"
+                    f"🔒 En margen: ${margen_usado:.2f} | Libre: ${balance:.2f}\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                     f"🔢 Operaciones: {len(historial_fut)}\n"
                     f"✅ Ganancias: {len(ganancias_f)}\n"
                     f"🔴 Pérdidas: {len(perdidas_f)}\n"
                     f"🎯 Win rate: {win_rate_f:.1f}%\n"
-                    f"💵 P&L total: {pnl_total_f:+.2f} USDT\n"
+                    f"💵 P&L cerrado: {pnl_total_f:+.2f} USDT\n"
                     + (f"\n<b>Últimas ops:</b>{ops_str}" if ops_str else "")
                 )
 
