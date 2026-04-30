@@ -28,7 +28,7 @@ load_dotenv()
 BINANCE_API_KEY  = os.getenv('BINANCE_API_KEY')
 BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
 GEMINI_API_KEY   = os.getenv('GEMINI_API_KEY')
-TELEGRAM_TOKEN   = "8513198629:AAHmlayu6y_Z2e2SUCkvKkLIEhj6kstxYT4"
+TELEGRAM_TOKEN   = "8513198629:AAFjoKwvoMxM4o1ml1uHSSLsLQ1V-B0eo_A"
 TELEGRAM_CHAT_ID = "1576867878"
 
 MONTO_POR_TRADE  = 200.0     # usar la mayor parte del capital disponible
